@@ -71,15 +71,33 @@ class DBObject(object):
 		ret['total'] = res.count()
 		items = res.skip(page*count).limit(count)
 		for i in items:
-			s = self.__class__(self._orig_conn)
+			s = self.__new__(self.__class__)
+			s.__init__(self._orig_conn)
 			s.id = i["_id"]
 			ret['data'].append(s)
 		return ret
 	def remove(self):
 		if self.id:
 			self.getConexion().remove({'_id':self.id})
+
 class Usuario(DBObject):
 	pass
+
+class Avisos(DBObject):
+	def add(self, regla, boe):
+		assert regla is None or isinstance(regla, Regla) or regla.id is None
+		res = self.getConexion().find_one({'usuario':regla['usuario'],'boe':boe}, fields=["_id"])
+		push_id = None
+		if res and "_id" in res:
+			push_id = res["_id"]
+		else:
+			push_id = self.getConexion().insert({'usuario':regla['usuario'], 'boe':boe})
+		if push_id:
+			self.getConexion().update({ '_id':push_id, 'alias':{"$ne":regla['alias']}}, {"$push":{'alias':regla['alias']}} )
+			ret = self.__new__(self.__class__)
+			ret.__init__(self._orig_conn)
+			ret.id = push_id
+			return ret
 
 class PalagraClave(DBObject):
 	def __init__(self, dbConnector, palabras_clave=["seccion","departamento","epigrafe","origen_legislativo","materia","alerta"]):
@@ -88,6 +106,9 @@ class PalagraClave(DBObject):
 	def __setitem__(self, key, value):
 		if key in self.psc:
 			value = value.lower()
+			if value.strip() == "":
+				self.id =  None
+				return
 			res = self.getConexion().find_one({key:value}, fields=["_id"])
 			if res and "_id" in res:
 				self.id = res["_id"]

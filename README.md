@@ -62,8 +62,9 @@ Para configurar web.py con servidor web consultar la [documentacion de web.py](h
 
 # TODO
 * Paguina Acerca
-* Sistema deteccion de reglas
-* Sistema de envio de alertas
+* Hacer uso de Celery para la busqueda de expresiones regulares
+* Mejorar el Sistema deteccion de reglas
+* Mejorar el Sistema de envio de alertas
 * Sistema login
 * Sistema multiusuario
 
@@ -84,8 +85,13 @@ que nos permitiran generar alertas genericas sobre apartados contretos, cuanto m
 BOEs procesados mayor numero de opciones, si aparecen nuevas se van insertando con cada analisis.
 <pre>
 $ python boe_parser.py 2013/01/01 --fin 2013/11/11
-$ python frontend.py
+
+$ python pagina.py
 </pre>
-Y acceder a 127.0.0.1:8080 para ver el portal de administracion.<br/>
+Y acceder a 127.0.0.1:8080/reglas para ver el portal de administracion.<br/>
 Por ultimo es recomendable configurar un cron para que automatize todos los dias el analisis del BOE nuevo.
 
+#Sobre las Reglas
+Las opciones Titulo y Texto se usan como expresiones regulares para buscar una concordancia.
+La opcion _'malfomado'_ es OPCIONAL y aparece en los BOEs del tipo A y B e implica que se ha detectado una imagen o contenido no precesable en modo texto.
+Aun que no marques esta opcion, los BOEs malformados se veran en tus alertas, ya que solo sirve para eliminar posibles alertas no requeridas.

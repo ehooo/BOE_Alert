@@ -99,41 +99,43 @@ class DatosUsuario(DefaultWeb):
 			usuario['sms']=""
 			usuario.save()
 		return usuario
-	def GET(self):
+	def GET(self, errores=None):
 		DefaultWeb.GET(self)
 		web.header('Content-Type', 'text/html')
-		return RENDER_BASE.usuario(DatosUsuario.get_usuario(), None)
+		avisos = basededatos.Avisos(DB)
+		usuario = DatosUsuario.get_usuario()
+		aviso = avisos.list(0,{'usuario':usuario.id},[],100)
+		return RENDER_BASE.usuario(usuario, aviso, errores)
 	def POST(self):
 		DefaultWeb.POST(self)
 		i = web.input()
-		#TODO validar los datos
 		usuario = DatosUsuario.get_usuario()
 		if i.get('alert_web'):
 			usuario['alert_web']=True
 		else:
 			usuario['alert_web']=False
 		'''
-		if i.get('alert_email'):
-			usuario['alert_email']=True
-		else:
-			usuario['alert_email']=False
-		if i.get('email'):
-			usuario['email']=i.get('email')
-		if i.get('alert_twitter'):
-			usuario['alert_twitter']=True
-		else:
-			usuario['alert_twitter']=False
-		if i.get('twitter'):
-			usuario['twitter']=i.get('twitter')
-		if i.get('alert_sms'):
-			usuario['alert_sms']=True
-		else:
-			usuario['alert_sms']=False
-		if i.get('sms'):
-			usuario['sms']=i.get('sms')
+			#TODO validar los datos
+			if i.get('alert_email'):
+				usuario['alert_email']=True
+			else:
+				usuario['alert_email']=False
+			if i.get('email'):
+				usuario['email']=i.get('email')
+			if i.get('alert_twitter'):
+				usuario['alert_twitter']=True
+			else:
+				usuario['alert_twitter']=False
+			if i.get('twitter'):
+				usuario['twitter']=i.get('twitter')
+			if i.get('alert_sms'):
+				usuario['alert_sms']=True
+			else:
+				usuario['alert_sms']=False
+			if i.get('sms'):
+				usuario['sms']=i.get('sms')
 		#'''
-		web.header('Content-Type', 'text/html')
-		return RENDER_BASE.usuario(usuario, [])
+		self.GET([])
 
 class AdminReglas(DefaultWeb):
 	def GET(self):
