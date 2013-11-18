@@ -1,0 +1,76 @@
+﻿$def with (usuario, errores)
+$var seccion: usuario
+
+<form id="alertas_usuario" method="POST" role="form">
+<div class="panel panel-primary">
+<div class="panel-heading"><h1 class="panel-title">Datos de usuario</h1></div>
+<div class="panel-body">
+$if errores is not None:
+	$if len(errores) > 0:
+		$for error in errores:
+			<div class="alert alert-danger">$error</div>
+	$else:
+		<div class="alert alert-success">Datos guardados</div>
+
+<fieldset class="panel panel-info">
+<div class="panel-heading"><span class="glyphicon glyphicon-globe"></span>
+<legend class="panel-title">Datos Web:</legend>
+</div>
+<label>Mostrar alerta por la web
+$if usuario['alert_web'] == True:
+	<input type="checkbox" value="true" checked="checked" name="alert_web" />
+$else:
+	<input type="checkbox" value="true" name="alert_web" />
+</label>
+</fieldset>
+
+<fieldset class="no_implementado panel panel-info">
+<div class="panel-heading"><span class="glyphicon glyphicon-envelope"></span>
+<legend class="panel-title">Datos de eMail:</legend>
+</div>
+<label>Enviar alertas por eMail
+$if usuario['alert_email'] == True:
+	<input type="checkbox" value="true" checked="checked" name="alert_email" />
+$else:
+	<input type="checkbox" value="true" name="alert_email" />
+</label>
+<label for="email" >eMail</label>
+<input id="email" type="email" value="$usuario['email']" placeholder="ejemplo@boe.es" name="email" />
+</fieldset>
+
+<fieldset class="no_implementado panel panel-info"><div class="panel-heading"><legend class="panel-title">Datos para Twitter:</legend></div>
+<label>Enviar alerta por DM
+$if usuario['alert_twitter'] == True:
+	<input type="checkbox" value="true" checked="checked" name="alert_twitter" />
+$else:
+	<input type="checkbox" value="true" name="alert_twitter" />
+</label>
+<label for="twitter">Twitter</label>
+<input id="twitter" type="text" value="$usuario['twitter']" placeholder="cuenta de Twitter" name="twitter" />
+</fieldset>
+
+<fieldset class="no_implementado panel panel-info">
+<div class="panel-heading"><span class="glyphicon glyphicon-phone"></span>
+<legend class="panel-title">Datos para SMS:</legend>
+</div>
+<div class="alert alert-warning">¡Atencion! Esta opcion puede acarrear un coste indirecto.</div>
+<label>Enviar alerta por SMS
+$if usuario['alert_sms'] == True:
+	<input type="checkbox" value="true" checked="checked" name="alert_sms" />
+$else:
+	<input type="checkbox" value="true" name="alert_sms" />
+</label>
+<label for="sms">N&uacute;mero m&oacute;vil</label>
+<input type="tel" value="$usuario['sms']" name="sms" placeholder="666666666" maxlength="12" />
+</fieldset>
+</div>
+<div class="panel-footer"><input type="submit" value="guardar" class="btn btn-primary"/></div>
+</div>
+</form>
+
+<div class="panel panel-danger">
+	<div class="panel-heading"><h3 class="panel-title">Ultimas alertas</h3></div>
+	<div class="panel-body">
+		Panel content
+	</div>
+</div>

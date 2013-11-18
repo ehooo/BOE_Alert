@@ -1,0 +1,14 @@
+﻿$def with (errores, tablaS, tablaA, tablaB)
+$var seccion: reglas
+
+
+$if errores is not None:
+	$if len(errores) > 0:
+		$for error in errores:
+			<div class="alert alert-danger">$error</div>
+	$else:
+		<div class="alert alert-success">Datos guardados</div>
+
+$:tablaS
+$:tablaA
+$:tablaB

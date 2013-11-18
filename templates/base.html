@@ -1,0 +1,51 @@
+﻿$def with (content)
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+
+<title></title>
+<link rel="shortcut icon" type="image/png" href="/static/img/icon.png" />
+
+<link rel="author" title="About" href="/about" />
+<link rel="copyright" title="Copyright" href="/copyright" />
+
+<!-- jQuery -->
+<script src="/static/js/jquery.min.js"></script>
+
+<!-- Bootstrap -->
+<script src="/static/js/bootstrap.min.js"></script>
+<link rel="stylesheet" href="/static/css/bootstrap.css" />
+
+<!-- DataTables -->
+<script type="text/javascript" language="javascript" src="/static/js/jquery.dataTables.min.js"></script>
+<link type="text/css" rel="stylesheet" href="/static/css/jquery.dataTables.css"/>
+<link type="text/css" rel="Stylesheet" href="/static/css/jquery.dataTables_themeroller.css"/>
+
+<link rel="stylesheet" type="text/css" href="/static/css/boe.css"/>
+<script type="text/javascript" src="/static/js/boe.js"></script>
+</head>
+<body>
+
+<div class="container">
+<div class="header">
+<ul class="nav nav-pills pull-right">
+$if content.seccion and content.seccion == 'usuario':
+	<li class="active"><a href="#">usuario</a></li>
+$else:
+	<li><a href="/usuario">usuario</a></li>
+$if content.seccion and content.seccion == 'reglas':
+	<li class="active"><a href="#">reglas</a></li>
+$else:
+	<li><a href="/reglas">reglas</a></li>
+$if content.seccion and content.seccion == 'acerca':
+	<li class="active"><a href="#">acerca</a></li>
+$else:
+	<li><a href="/acerca">acerca</a></li>
+</ul>
+<h3 class="text-muted">Alertas del BOE</h3>
+</div>
+
+$:content
+</div>
+</body>

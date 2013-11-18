@@ -1,0 +1,63 @@
+﻿$def with (title, columnas, table_id)
+<div class="panel panel-primary">
+<div class="panel-heading">$title</div>
+<div class="panel-body">
+<table cellpadding="0" cellspacing="0" border="0" class="display" id="$table_id">
+<thead>
+<tr>
+$for key in columnas:
+	<th width="$key['width']">$key['title'].replace('_',' ')</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td colspan="$len(columnas)" class="dataTables_empty">Cargando datos del servidor</td>
+</tr>
+</tbody>
+<tfoot>
+<tr>
+$for key in columnas:
+	<th>$key['title'].replace('_',' ')</th>
+</tr>
+</tfoot>
+</table>
+</div>
+
+<div class="modal fade" id="modal_$table_id" tabindex="-1" role="dialog" aria-labelledby="n_regla_$table_id" aria-hidden="true">
+<div class="modal-dialog">
+<div class="modal-content">
+<div class="modal-header">
+<button type="button" class="close" data-dismiss="modal" aria-hidden="true">&times;</button>
+<h4 class="modal-title" id="n_regla_$table_id">Insertar nueva regla</h4>
+</div>
+<div class="modal-body">
+<form id="form_$table_id">
+$for key in columnas:
+	$if 'input' in key and 'type' in key:
+		$if key['type'] == "checkbox":
+			<div class="checkbox">
+			<label>$key['input'].replace('_',' ') <input name="$key['input']" type="$key['type']" value="true"/></label>
+			</div>
+		$else:
+			<div class="form-group">
+			<label for="$key['input']_$table_id">$key['input'].replace('re_','').replace('_',' '):</label>
+			<input id="$key['input']_$table_id" name="$key['input']" type="$key['type']" placeholder="$key['input'].replace('re_','').replace('_',' ')" class="form-control" value="" />
+			</div>
+	$elif 'select' in key:
+		<div class="form-group">
+		<label for="$key['select']_$table_id">$key['select'].replace('_',' '):</label><select id="$key['select']_$table_id" name="$key['select']" class="form-control"></select>
+		</div>
+</form>
+</div>
+<div class="modal-footer">
+<button type="button" class="btn btn-default" data-dismiss="modal">Cancelar</button>
+<button type="button" class="btn btn-primary" id="guardar_$table_id">Guardar</button>
+</div>
+</div>
+</div>
+</div>
+
+
+</div>
+
+
