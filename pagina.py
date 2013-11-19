@@ -25,8 +25,10 @@ web.config.session_parameters['expired_message'] = 'Session expired'
 web.config.session_parameters['httponly'] = False
 
 URLS = (
+	'/(acerca)?', 'Estatico',
 	'/usuario', 'DatosUsuario',
 	'/reglas', 'AdminReglas',
+	'/alertas', 'Alertas',
 	'/reglas/S', 'BOE_S',#Interfaz Json
 	'/reglas/A', 'BOE_A',#Interfaz Json
 	'/reglas/B', 'BOE_B',#Interfaz Json
@@ -82,6 +84,12 @@ class DefaultWeb:
 	def OPTIONS(self, *extras):
 		raise web.Forbidden()
 
+class Estatico(DefaultWeb):
+	def GET(self, path=None):
+		DefaultWeb.GET(self)
+		web.header('Content-Type', 'text/html')
+		return RENDER_BASE.acerca()
+
 class DatosUsuario(DefaultWeb):
 	@staticmethod
 	def get_usuario():
@@ -102,10 +110,8 @@ class DatosUsuario(DefaultWeb):
 	def GET(self, errores=None):
 		DefaultWeb.GET(self)
 		web.header('Content-Type', 'text/html')
-		avisos = basededatos.Avisos(DB)
 		usuario = DatosUsuario.get_usuario()
-		aviso = avisos.list(0,{'usuario':usuario.id},[],100)
-		return RENDER_BASE.usuario(usuario, aviso, errores)
+		return RENDER_BASE.usuario(usuario, errores)
 	def POST(self):
 		DefaultWeb.POST(self)
 		i = web.input()
@@ -154,7 +160,7 @@ class AdminReglas(DefaultWeb):
 				web.header('Content-Type', 'application/json')
 				raise web.NotFound(json.dumps({"error":"listado %s no valido"%i.get('listado')}))
 			pc = basededatos.PalagraClave(DB)
-			ret = pc.list(0,{lista:{'$exists': True}},[],200)
+			ret = pc.list(0,{lista:{'$exists': True}},[(lista,1)],200)
 			web.header('Content-Type', 'application/json')
 			return json.dumps(ret['data'], cls=ComplexEncoder)
 
@@ -169,19 +175,29 @@ class ComplexEncoder(json.JSONEncoder):
 			return str(obj)
 		elif isinstance(obj, basededatos.PalagraClave):
 			return str(obj)
+		elif isinstance(obj, basededatos.Alertas):
+			return [obj['boe'], obj['alias']]
 		return json.JSONEncoder.default(self, obj)
-class Table_Base(DefaultWeb):
+
+class TablaBase(DefaultWeb):
 	COLUMNAS = [
-		#{ 'title':'domain',	'width':'10%',	'input':'domain'},
-		#{ 'title':'N urls',	'width':'10%',	'input':False}
+		#{ 'title':'Texto',		'width':'10%',	'input':'texto',	'type':'text'},
+		#{ 'title':'Listado',	'width':'10%',	'select':'lista'}
+		#{ 'title':'Columna simple',	'width':'10%' }
 	]
-	def __init__(self, tipo):
-		self.tipo = tipo
+	def __init__(self):
 		self.json_encoder = ComplexEncoder
-	def GET(self, titulo, tabla_id):
-		DefaultWeb.GET(self)
-		web.header('Content-Type', 'text/html')
-		return RENDER.tabla(titulo, self.__class__.COLUMNAS, tabla_id)
+	def toDataTables(self, lista, total_filtrado=None):
+		if total_filtrado is None:
+			total_filtrado = lista['total']
+		ret = {
+			"sEcho": web.input().get('sEcho'),
+			"iTotalRecords": lista['total'],
+			"iTotalDisplayRecords": lista['total'],
+			"aaData":[]
+		}
+		ret["aaData"] = lista['data']
+		return ret
 	def get_list_params(self):
 		i = web.input()
 		COLUMNAS = []
@@ -225,7 +241,44 @@ class Table_Base(DefaultWeb):
 			except:
 				pass
 		return (pag, busquedas, sort, tamXpag)
-	def validaDatos(self):
+
+class Alertas(TablaBase):
+	COLUMNAS = [
+		{ 'title':'boe',	'width':'30%'},
+		{ 'title':'alias',	'width':'70%'}
+	]
+	def GET(self):
+		TablaBase.GET(self)
+		return RENDER_BASE.alertas(self.__class__.COLUMNAS)
+	def POST(self):
+		TablaBase.POST(self)
+		borrar = web.input().get('borrar')
+		db_obj = basededatos.Alertas(DB)
+		usuario = DatosUsuario.get_usuario()
+		web.header('Content-Type', 'application/json')
+		if borrar is not None:
+			elements = db_obj.list(0, {'boe':borrar,'usuario':usuario.id}, [], 1)
+			if len(elements['data'])>0:
+				elements['data'][0].remove()
+				return json.dumps({"ok":"Aviso borrado"})
+			raise web.NotFound(json.dumps({"error":"Aviso no encontrado"}))
+
+		(pag, busquedas, sort, tamXpag) = self.get_list_params()
+		i = web.input()
+		if i.has_key('sSearch'):
+			termino = re.escape( i.get('sSearch').strip() )
+			if termino != '':
+				regx = re.compile('.*%s.*'%termino ,re.IGNORECASE)
+				busquedas['$or'] = [{'boe':regx},{'alias':regx}]
+		busquedas['usuario'] = usuario.id
+		elements = db_obj.list(pag, busquedas, sort, tamXpag)
+		return json.dumps(self.toDataTables(elements), cls=self.json_encoder)
+
+class TablaReglasBase(TablaBase):
+	def __init__(self, tipo):
+		TablaBase.__init__(self)
+		self.tipo = tipo
+	def valida_datos(self):
 		i = web.input()
 		post_valido = False
 		query = {}
@@ -262,18 +315,13 @@ class Table_Base(DefaultWeb):
 			for clave in query:
 				if query[clave] != None:
 					return query
-	def toDataTables(self, lista, total_filtrado=None):
-		if total_filtrado is None:
-			total_filtrado = lista['total']
-		ret = {
-			"sEcho": web.input().get('sEcho'),
-			"iTotalRecords": lista['total'],
-			"iTotalDisplayRecords": lista['total'],
-			"aaData":[]
-		}
-		ret["aaData"] = lista['data']
-		return ret
+
+	def GET(self, titulo, tabla_id):
+		TablaBase.GET(self)
+		web.header('Content-Type', 'text/html')
+		return RENDER.tabla_reglas(titulo, self.__class__.COLUMNAS, tabla_id)
 	def POST(self):
+		TablaBase.POST(self)
 		usuario = DatosUsuario.get_usuario()
 		db_obj = basededatos.Regla(DB)
 		borrar = web.input().get('borrar')
@@ -294,11 +342,9 @@ class Table_Base(DefaultWeb):
 
 		return json.dumps(self.toDataTables(elements), cls=self.json_encoder)
 
-class SEncoder(json.JSONEncoder):
+class SEncoder(ComplexEncoder):
 	def default(self, obj):
-		if isinstance(obj, datetime):
-			return obj.isoformat()
-		elif isinstance(obj, basededatos.Regla):
+		if isinstance(obj, basededatos.Regla):
 			ret = []
 			for fila in BOE_S.COLUMNAS:
 				clave = None
@@ -315,8 +361,8 @@ class SEncoder(json.JSONEncoder):
 						ret.append(obj[clave])
 			ret.append(cifrar_id(obj.id, DatosUsuario.get_usuario()))
 			return ret
-		return json.JSONEncoder.default(self, obj)
-class BOE_S(Table_Base):
+		return ComplexEncoder.default(self, obj)
+class BOE_S(TablaReglasBase):
 	COLUMNAS = [
 		{ 'title':'alias',	'width':'10%',	'input':'alias', 'type':'text'},
 		{ 'title':'seccion', 'width':'10%', 'select':'seccion'},
@@ -325,34 +371,34 @@ class BOE_S(Table_Base):
 		{ 'title':'titulo', 'width':'10%', 'input':'re_titulo', 'type':'text'}
 	]
 	def __init__(self):
-		Table_Base.__init__(self, 'S')
+		TablaReglasBase.__init__(self, 'S')
 		self.json_encoder = SEncoder
 	def GET(self):
-		return Table_Base.GET(self, "Reglas para BOE-S","boe_s")
+		return TablaReglasBase.GET(self, "Reglas para BOE-S","boe_s")
 	def POST(self):
 		alias = web.input().get('alias')
 		if alias is not None:
-			query = self.validaDatos()
+			query = self.valida_datos()
 			error = False
 			if len(alias.strip())==0:
 				error = json.dumps({"error":"Debe insertar un alias"})
 			elif query:
 				db_obj = basededatos.Regla(DB)
 				ret = db_obj.add_rule_S(DatosUsuario.get_usuario(), alias, query['seccion'], query['departamento'], query['epigrafe'], query['re_titulo'])
+				self.securizar_cabezera()
 				return json.dumps({"ok":"Regla insertada"})
 			else:
 				error = json.dumps({"error":"Debe insertar mas datos ademas del alias"})
 			if error:
+				self.securizar_cabezera()
 				web.header('Content-Type', 'application/json')
 				raise web.NotFound(error)
 				return error
-		return Table_Base.POST(self)
+		return TablaReglasBase.POST(self)
 
-class AEncoder(json.JSONEncoder):
+class AEncoder(ComplexEncoder):
 	def default(self, obj):
-		if isinstance(obj, datetime):
-			return obj.isoformat()
-		elif isinstance(obj, basededatos.Regla):
+		if isinstance(obj, basededatos.Regla):
 			ret = []
 			for fila in BOE_A.COLUMNAS:
 				clave = None
@@ -369,8 +415,8 @@ class AEncoder(json.JSONEncoder):
 						ret.append(obj[clave])
 			ret.append(cifrar_id(obj.id, DatosUsuario.get_usuario()))
 			return ret
-		return json.JSONEncoder.default(self, obj)
-class BOE_A(Table_Base):
+		return ComplexEncoder.default(self, obj)
+class BOE_A(TablaReglasBase):
 	COLUMNAS = [
 		{ 'title':'alias',	'width':'10%',	'input':'alias', 'type':'text'},
 		{ 'title':'malformado',	'width':'10%',	'input':'malformado', 'type':'checkbox'},
@@ -382,34 +428,34 @@ class BOE_A(Table_Base):
 		{ 'title':'texto',	'width':'10%',	'input':'re_texto', 'type':'text'}
 	]
 	def __init__(self):
-		Table_Base.__init__(self, 'A')
+		TablaReglasBase.__init__(self, 'A')
 		self.json_encoder = AEncoder
 	def GET(self):
-		return Table_Base.GET(self, "Reglas para BOE-A","boe_a")
+		return TablaReglasBase.GET(self, "Reglas para BOE-A","boe_a")
 	def POST(self):
 		alias = web.input().get('alias')
 		if alias is not None:
-			query = self.validaDatos()
+			query = self.valida_datos()
 			error = False
 			if len(alias.strip())==0:
 				error = json.dumps({"error":"Debe insertar un alias"})
 			elif query:
 				db_obj = basededatos.Regla(DB)
 				ret = db_obj.add_rule_A(DatosUsuario.get_usuario(), alias, query['malformado'], query['re_titulo'], query['departamento'], query['origen_legislativo'], query['materia'], query['alerta'], query['re_texto'])
+				self.securizar_cabezera()
 				return json.dumps({"ok":"Regla insertada"})
 			else:
 				error = json.dumps({"error":"Debe insertar mas datos ademas del alias"})
 			if error:
 				web.header('Content-Type', 'application/json')
+				self.securizar_cabezera()
 				raise web.NotFound(error)
 				return error
-		return Table_Base.POST(self)
+		return TablaReglasBase.POST(self)
 
-class BEncoder(json.JSONEncoder):
+class BEncoder(ComplexEncoder):
 	def default(self, obj):
-		if isinstance(obj, datetime):
-			return obj.isoformat()
-		elif isinstance(obj, basededatos.Regla):
+		if isinstance(obj, basededatos.Regla):
 			ret = []
 			for fila in BOE_B.COLUMNAS:
 				clave = None
@@ -426,8 +472,8 @@ class BEncoder(json.JSONEncoder):
 						ret.append(obj[clave])
 			ret.append(cifrar_id(obj.id, DatosUsuario.get_usuario()))
 			return ret
-		return json.JSONEncoder.default(self, obj)
-class BOE_B(Table_Base):
+		return ComplexEncoder.default(self, obj)
+class BOE_B(TablaReglasBase):
 	COLUMNAS = [
 		{ 'title':'alias',	'width':'10%',	'input':'alias', 'type':'text'},
 		{ 'title':'malformado',	'width':'10%',	'input':'malformado', 'type':'checkbox'},
@@ -436,28 +482,32 @@ class BOE_B(Table_Base):
 		{ 'title':'texto',	'width':'10%',	'input':'re_texto', 'type':'text'}
 	]
 	def __init__(self):
-		Table_Base.__init__(self, 'B')
+		TablaReglasBase.__init__(self, 'B')
 		self.json_encoder = BEncoder
 	def GET(self):
-		return Table_Base.GET(self, "Reglas para BOE-B","boe_b")
+		return TablaReglasBase.GET(self, "Reglas para BOE-B","boe_b")
 	def POST(self):
 		alias = web.input().get('alias')
 		if alias is not None:
-			query = self.validaDatos()
+			query = self.valida_datos()
 			error = False
 			if len(alias.strip())==0:
 				error = json.dumps({"error":"Debe insertar un alias"})
 			elif query:
 				db_obj = basededatos.Regla(DB)
 				ret = db_obj.add_rule_B(DatosUsuario.get_usuario(), alias, query['malformado'], query['re_titulo'], query['departamento'], query['re_texto'])
+
+				self.securizar_cabezera()
 				return json.dumps({"ok":"Regla insertada"})
 			else:
 				error = json.dumps({"error":"Debe insertar mas datos ademas del alias"})
 			if error:
 				web.header('Content-Type', 'application/json')
+
+				self.securizar_cabezera()
 				raise web.NotFound(error)
 				return error
-		return Table_Base.POST(self)
+		return TablaReglasBase.POST(self)
 
 
 if __name__ == "__main__":

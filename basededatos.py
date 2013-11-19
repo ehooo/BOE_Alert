@@ -83,7 +83,7 @@ class DBObject(object):
 class Usuario(DBObject):
 	pass
 
-class Avisos(DBObject):
+class Alertas(DBObject):
 	def add(self, regla, boe):
 		assert regla is None or isinstance(regla, Regla) or regla.id is None
 		res = self.getConexion().find_one({'usuario':regla['usuario'],'boe':boe}, fields=["_id"])

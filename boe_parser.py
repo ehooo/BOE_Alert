@@ -1,7 +1,15 @@
 '''
 
 '''
-import logging, httplib
+import logging, httplib, urllib2, urlparse, re
+from xml.parsers.expat import ParserCreate
+from HTMLParser import HTMLParser
+from datetime import datetime
+
+from utilidades import cargar_conf
+CONF = cargar_conf()
+import basededatos
+DB = basededatos.DBConnector(CONF)
 
 def get_attr(attrs, key):
 	for (k,v) in attrs:
@@ -30,9 +38,33 @@ def wget(host, path, cabezera={}, tipo="GET", post=None):
 	contenido = eval("u"+repr(contenido))
 	contenido = contenido.encode(def_encode)
 	return (contenido, cabezeras, estado)
+def proxy_wget(url, cabezera={}):
+	req = urllib2.Request(url, headers=cabezera)
+	proxy_handler = urllib2.ProxyHandler()
+	opener = urllib2.build_opener(proxy_handler)
+	contenido = None
+	cabezeras = {}
+	estado = None
+	try:
+		f = opener.open(req)
+		estado = f.code
+		contenido = f.read()
+		cabezeras = f.headers.dict
+		f.close()
+		opener.close()
+	except urllib2.HTTPError as er:
+		logging.error("Acceso fallido a %s --> %s"%(url, er))
+		cabezeras = er.headers.dict
+		if estado is None:
+			estado = er.code
+		if estado is None:
+			estado = er.errno
+	finally:
+		return (contenido, cabezeras, estado)
 
-import urlparse
 def wget_url(url, cabezera={}, tipo="GET", post=None):
+	if CONF.has_option("conexion", "proxy") and CONF.getboolean("conexion", "proxy"):
+		return proxy_wget(url, cabezera)
 	url = urlparse.urlparse(url)
 	dominio = url.netloc
 	if url.hostname:
@@ -48,14 +80,11 @@ def wget_url(url, cabezera={}, tipo="GET", post=None):
 		path += "#"+url.fragment
 	return wget(dominio, path, cabezera, tipo, post)
 
-from utilidades import cargar_conf
-CONF = cargar_conf()
-import basededatos
-DB = basededatos.DBConnector(CONF)
 
 from celery import task
 @task
 def envia_alerta(aviso):
+	aviso['enviado'] = True
 	logging.info("Notificar a %s sobre '%s' en el BOE: %s"%(aviso['usuario'], aviso['alias'], aviso['boe']))
 
 @task
@@ -97,9 +126,6 @@ def procesa_boe(id, rapido=False):
 			#procesa_boe.apply_async([boe_id, rapido])#Celery
 			procesa_boe(boe_id, rapido)
 
-from HTMLParser import HTMLParser
-from datetime import datetime
-import re
 class BoeDiaParser(HTMLParser):
 	URL_DATE_FORMAT = "http://boe.es/boe/dias/%Y/%m/%d/"
 
@@ -133,7 +159,6 @@ class BoeDiaParser(HTMLParser):
 		if self.en_link and (tag == 'li' or tag == 'a'):
 			self.en_link = False
 
-from xml.parsers.expat import ParserCreate
 class BasicParser():
 	def __init__(self, boe):
 		self.boe = boe
@@ -149,8 +174,8 @@ class BasicParser():
 	def feed(self, contenido):
 		self.p.Parse(contenido)
 	def alert(self, regla):
-		avisos = basededatos.Avisos(DB)
-		av = avisos.add(regla, self.boe)
+		alertas = basededatos.Alertas(DB)
+		av = alertas.add(regla, self.boe)
 		if not 'enviado' in av or not av['enviado']:
 			envia_alerta(av)
 			#alert.apply_async([elem['usuario'], self.boe])#Celery
@@ -591,9 +616,9 @@ if __name__ == "__main__":
 						help='Fecha de fin en formato AAAA/MM/DD, por defecto hoy',
 						metavar='AAAA/MM/DD'
 						)
-	parser.add_argument('-r','--rapido'
-						type=bool,
-						default=None,
+	parser.add_argument('--rapido',
+						action='store_true',
+						default=False,
 						help='No analiza si no hay posibles reglas aplicables'
 						)
 
@@ -601,10 +626,11 @@ if __name__ == "__main__":
 	inicio = datetime.strptime(args.inicio, FORMATO_FECHA)
 	fin = datetime.strptime(args.fin, FORMATO_FECHA)
 	undia = timedelta(1)
+
 	while inicio <= fin:
 		try:
 			boe_parser = BoeDiaParser(inicio)
-			procesa_boe(boe_parser.boe_id, args.r)
+			procesa_boe(boe_parser.boe_id, args.rapido)
 		except ValueError:
 			pass
 		inicio += undia

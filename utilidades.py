@@ -20,10 +20,10 @@ def cargar_conf():
 	return conf
 
 try:
-	#For Linux
+	#Para Linux
 	from pymongo.bson import ObjectId
 except:
-	#For Windows
+	#Para Windows
 	from bson.objectid import ObjectId
 
 def cifrar_id(id, usuario):

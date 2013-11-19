@@ -22,15 +22,9 @@ Consta de dos scripts principales:
 * pagina.py: Aplicacion para WebPy que permite insertar reglas y configurar el modo de alerta.
 * boe_parser.py: Que procesa el BOE de un dia dado, o el ultimo publicado.
 
-# Dependencias:
-* __[pymongo](http://api.mongodb.org/python/current/ "PyMongo"):__ Como conector con la base de datos [MongoDB](http://www.mongodb.org/).
-* __[WebPy](https://github.com/webpy/webpy "Framework WebPy"):__ Simple web Framework para Python.
-* __[Celery](https://github.com/webpy/webpy "Framework WebPy"):__ Sistema de procesado multiple y distribuido.
-
-# Powered by:
-* [Bootstrap](http://getbootstrap.com/getting-started/)
-* [jQuery](http://jquery.com/download/)
-* [DataTables](http://datatables.net/download/)
+El programa `boe_parser.py` se encarga de procesar el BOE haciendo uso de 
+ficheros xml del [portal oficial](http://boe.es/diario_boe/) y 
+comparandolos con expresiones regurales y otros filtros.
 
 # Instalar
 * [python](http://www.python.org/download/): `# apt-get install python`
@@ -59,24 +53,19 @@ Para configurar web.py con servidor web consultar la [documentacion de web.py](h
 * [web]
  * debug = Un valor Verdadero o Falso para [ConfigParser](http://docs.python.org/2/library/#ConfigParser.RawConfigParser.getboolean)
  * tema = Path donde se encuentra las plantillas de la web
+* [conexion]
+ * proxy = debug = Un valor Verdadero o Falso para [ConfigParser](http://docs.python.org/2/library/#ConfigParser.RawConfigParser.getboolean)
+permite usar como salida a intenet el proxy configurado en el equipo, util si se quiere usar en universidades, ...
 
-# TODO
-* Paguina Acerca
-* Hacer uso de Celery para la busqueda de expresiones regulares
-* Mejorar el Sistema deteccion de reglas
-* Mejorar el Sistema de envio de alertas
-* Sistema login
-* Sistema multiusuario
+# Dependencias:
+* __[pymongo](http://api.mongodb.org/python/current/ "PyMongo"):__ Como conector con la base de datos [MongoDB](http://www.mongodb.org/).
+* __[WebPy](https://github.com/webpy/webpy "Framework WebPy"):__ Simple web Framework para Python.
+* __[Celery](https://github.com/webpy/webpy "Framework WebPy"):__ Sistema de procesado multiple y distribuido.
 
-# Ejemplos
-Procesa el dia de hoy
-`$ python boe_parser.py`
-
-Procesa desde el 2013 hasta hoy
-`$ python boe_parser.py 2013/01/01`
-
-Procesa todo el 2012
-`$ python boe_parser.py 2012/01/01 --fin 2013/01/01`
+# WebUI Powered by:
+* [Bootstrap](http://getbootstrap.com/getting-started/)
+* [jQuery](http://jquery.com/download/)
+* [DataTables](http://datatables.net/download/)
 
 #Puesta a punto
 Antes de insertar reglas en el sistema es recomendame nutrilo con los datos como:
@@ -95,3 +84,25 @@ Por ultimo es recomendable configurar un cron para que automatize todos los dias
 Las opciones Titulo y Texto se usan como expresiones regulares para buscar una concordancia.
 La opcion _'malfomado'_ es OPCIONAL y aparece en los BOEs del tipo A y B e implica que se ha detectado una imagen o contenido no precesable en modo texto.
 Aun que no marques esta opcion, los BOEs malformados se veran en tus alertas, ya que solo sirve para eliminar posibles alertas no requeridas.
+
+# Ejemplos
+Procesa el dia de hoy
+`$ python boe_parser.py`
+
+Procesa desde el 2013 hasta hoy
+`$ python boe_parser.py 2013/01/01`
+
+Procesa todo el 2012
+`$ python boe_parser.py 2012/01/01 --fin 2013/01/01`
+
+Procesa todo el 2012 solo si hay reglas, util si solo se tiene reglas de un tipo
+`$ python boe_parser.py 2012/01/01 --fin 2013/01/01 --rapido`
+
+# TODO
+* Aplicar Celery
+* Pagina Acerca
+* Hacer uso de Celery para la busqueda de expresiones regulares
+* Mejorar el Sistema deteccion de reglas
+* Envio por eMail
+* Sistema login
+* Sistema multiusuario

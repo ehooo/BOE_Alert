@@ -1,4 +1,4 @@
-﻿$def with (usuario, avisos, errores)
+﻿$def with (usuario, errores)
 $var seccion: usuario
 
 <form id="alertas_usuario" method="POST" role="form">
@@ -67,22 +67,3 @@ $else:
 <div class="panel-footer"><input type="submit" value="guardar" class="btn btn-primary"/></div>
 </div>
 </form>
-
-<div class="panel panel-danger">
-<div class="panel-heading"><h3 class="panel-title">Ultimas alertas</h3></div>
-<div class="panel-body">
-$for aviso in avisos['data']:	
-	<div id="$aviso['boe']">
-	$ texto=""
-	$for alias in aviso['alias']:
-		$ texto+= "'"+alias+"', "
-	$aviso['boe'] <span class="badge" rel="popover" data-content="$texto[:-2]" data-placement="top">$len(aviso['alias'])</span>
-	<script>
-	jQuery("#$aviso['boe'] .badge").popover({ 'trigger':'hover' });
-	</script>
-	<!-- <a href="http://boe.es/boe/dias/YYYY/MM/DD/pdfs/$aviso['boe']" >pdf</a> -->
-	<a href="http://boe.es/diario_boe/epub.php?id=$aviso['boe']" >ePub</a>
-	<a href="http://boe.es/diario_boe/xml.php?id=$aviso['boe']" >xml</a>
-	</div>
-</div>
-</div>

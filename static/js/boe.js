@@ -22,8 +22,86 @@ var ES_LANG = {
 }
 
 $(document).ready(function() {
+	pagina_usuario();
+	pagina_reglas();
+});
+
+function maneja_error(jqXHR, textStatus, errorThrow){
+	var error = jQuery.parseJSON(jqXHR.responseText).error;
+	if(error)
+		alert(error);
+	else
+		alert(textStatus);
+};
+function pagina_usuario(){
 	$(".no_implementado input").attr("disabled","disabled");
 
+	var alertas = $('#alertas_boe').dataTable( {
+		"oLanguage": ES_LANG,
+		"bProcessing": true,
+		"bServerSide": true,
+		"iDisplayLength": 10,
+		"aLengthMenu": [ 10, 15, 20 ],
+		"sDom":'l<"borrar_alerta glyphicon glyphicon-trash">frtip',
+		"sServerMethod": "POST",
+        "sAjaxSource": "/alertas",
+		"oTableTools": { "sRowSelect": "single" },
+		"fnDrawCallback":check_buton,
+		"fnRowCallback": prepare_row
+    } );
+	
+	var boton = $('<button/>',{
+		'type':'button',
+		'class':'btn btn-primary btn-xs',
+		"data-toggle":"button"
+	});
+	$(".borrar_alerta").wrap(boton);
+	$('#alertas_boe_wrapper .borrar_alerta').parent().click(function(){
+		var post_data = $(this.parentNode).find('tr.row_selected');
+		post_data = {'borrar':post_data.attr('id')};
+		jQuery.ajax({
+			cache:false,
+			type: 'POST',
+			url: "/alertas",
+			dataType: 'json',
+			data: post_data,
+			error: maneja_error,
+			success:function(){ alertas.fnDraw(); }
+		});
+	});
+
+	function check_buton(element){
+		var table = this;
+		if (!(this instanceof Window))
+			element = this;
+		else
+			table = $(element).parent();
+		var a = $(element).parentsUntil('.panel-body').find('.borrar_alertas').parent();
+		var b = $(table).find('tr.row_selected').length;
+		if (b > 0){
+			a.removeAttr('disabled');
+		}else{
+			a.attr('disabled','disabled');
+		}
+	};
+
+	function prepare_row(nRow, aData, iDisplayIndex, iDisplayIndexFull){
+		var boe = $('td:eq(0)', nRow);
+		//TODO Insertar enlaces a xml y epub
+		$(nRow).attr('id',aData[0]);
+		$(nRow).click( function( e ) {
+			if ( $(this).hasClass('row_selected') ) {
+				$(this).removeClass('row_selected');
+			} else {
+				$(this.parentNode).children('tr.row_selected').removeClass('row_selected');
+				$(this).addClass('row_selected');
+			}
+			check_buton(e.currentTarget);
+		});
+	};
+};
+
+function pagina_reglas(){
 	var boe_s = $('#boe_s').dataTable( {
 		"oLanguage": ES_LANG,
 		"bProcessing": true,
@@ -66,14 +144,6 @@ $(document).ready(function() {
 		"fnDrawCallback":check_buttons,
 		"fnRowCallback": prepare_row
     } );
-
-	function maneja_error(jqXHR, textStatus, errorThrow){
-		var error = jQuery.parseJSON(jqXHR.responseText).error;
-		if(error)
-			alert(error);
-		else
-			alert(textStatus);
-	};
 
 	$('#guardar_boe_s').click(function(){
 		var post_data = $("#form_boe_s").serialize();
@@ -239,5 +309,6 @@ $(document).ready(function() {
 			a.attr('disabled','disabled');
 		}
 	}
+};
 
-});
+
