@@ -22,9 +22,23 @@ var ES_LANG = {
 }
 
 $(document).ready(function() {
-	pagina_usuario();
+	check_alertas();
+	$(".no_implementado input").attr("disabled","disabled");
+	pagina_alertas();
 	pagina_reglas();
 });
+
+function check_alertas(){
+	jQuery.ajax({
+		cache:false,
+		type: 'POST',
+		url: "/alertas",
+		dataType: 'json',
+		data: {'total':true},
+		error: maneja_error,
+		success:function(data){ $('#total_alertas').text(data.total); }
+	});
+};
 
 function maneja_error(jqXHR, textStatus, errorThrow){
 	var error = jQuery.parseJSON(jqXHR.responseText).error;
@@ -33,8 +47,7 @@ function maneja_error(jqXHR, textStatus, errorThrow){
 	else
 		alert(textStatus);
 };
-function pagina_usuario(){
-	$(".no_implementado input").attr("disabled","disabled");
+function pagina_alertas(){
 
 	var alertas = $('#alertas_boe').dataTable( {
 		"oLanguage": ES_LANG,
@@ -53,9 +66,11 @@ function pagina_usuario(){
 	var boton = $('<button/>',{
 		'type':'button',
 		'class':'btn btn-primary btn-xs',
-		"data-toggle":"button"
+		"data-toggle":"button",
+		'disabled':'disabled'
 	});
 	$(".borrar_alerta").wrap(boton);
+	
 	$('#alertas_boe_wrapper .borrar_alerta').parent().click(function(){
 		var post_data = $(this.parentNode).find('tr.row_selected');
 		post_data = {'borrar':post_data.attr('id')};
@@ -66,7 +81,7 @@ function pagina_usuario(){
 			dataType: 'json',
 			data: post_data,
 			error: maneja_error,
-			success:function(){ alertas.fnDraw(); }
+			success:function(){ alertas.fnDraw(); check_alertas(); }
 		});
 	});
 
@@ -86,7 +101,27 @@ function pagina_usuario(){
 	};
 
 	function prepare_row(nRow, aData, iDisplayIndex, iDisplayIndexFull){
-		var boe = $('td:eq(0)', nRow);
+		var boe = $('td:eq(0)', nRow);/*
+		boe.append(
+			$('<a/>',{'class':'pdf', 'title':'pdf', 'href':'#', 'target':'_blank'}).append(
+				$('<img/>',{'src':'/static/images/pdf.png', 'alt':'pdf'})
+			)
+		);//*/
+		boe.append(
+			$('<a/>',{'class':'html', 'title':'html', 'href':'http://boe.es/diario_boe/txt.php?id='+aData[0] , 'target':'_blank'}).append(
+				$('<img/>',{'src':'/static/images/txt.png', 'alt':'html'})
+			)
+		);
+		boe.append(
+			$('<a/>',{'class':'epub', 'title':'epub', 'href':'http://boe.es/diario_boe/epub.php?id='+aData[0] , 'target':'_blank'}).append(
+				$('<img/>',{'src':'/static/images/epub.png', 'alt':'epub'})
+			)
+		);
+		boe.append(
+			$('<a/>',{'class':'xml', 'title':'xml', 'href':'http://boe.es/diario_boe/xml.php?id='+aData[0] , 'target':'_blank'}).append(
+				$('<img/>',{'src':'/static/images/xml.png', 'alt':'xml'})
+			)
+		);
 		//TODO Insertar enlaces a xml y epub
 		$(nRow).attr('id',aData[0]);
 		$(nRow).click( function( e ) {

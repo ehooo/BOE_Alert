@@ -2,129 +2,19 @@
 
 '''
 import logging, httplib, urllib2, urlparse, re
-from xml.parsers.expat import ParserCreate
+
+from xml.parsers.expat import ParserCreate, ExpatError
 from HTMLParser import HTMLParser
 from datetime import datetime
 
-from utilidades import cargar_conf
-CONF = cargar_conf()
-import basededatos
-DB = basededatos.DBConnector(CONF)
+from utils import get_attr, cargar_conf, FICHERO_CONFIGURACION
+from db import Regla, PalagraClave, DBConnector, Alertas
 
-def get_attr(attrs, key):
-	for (k,v) in attrs:
-		if k == key:
-			return v
-	return None
-def wget(host, path, cabezera={}, tipo="GET", post=None):
-	logging.debug("%s%s %s"%(host, path, cabezera))
-	conn = httplib.HTTPConnection(host)
-	conn.request(tipo, path, post, cabezera)
-	res = conn.getresponse()
-	estado = res.status
-	cabezeras = res.getheaders()
-	content_type = get_attr(cabezeras, 'content-type')
+FORMATO_FECHA = "%Y/%m/%d"
 
-	def_encode = 'latin_1'
-	if content_type:
-		init = content_type.find('charset=')
-		if init > -1:
-			init += len('charset=')
-			def_encode = content_type[init:]
-			#logging.debug("Detectado encode: %s"%(def_encode))
+CONF = cargar_conf(FICHERO_CONFIGURACION)
+DB = DBConnector(CONF)
 
-	contenido = res.read()
-	conn.close()
-	contenido = eval("u"+repr(contenido))
-	contenido = contenido.encode(def_encode)
-	return (contenido, cabezeras, estado)
-def proxy_wget(url, cabezera={}):
-	req = urllib2.Request(url, headers=cabezera)
-	proxy_handler = urllib2.ProxyHandler()
-	opener = urllib2.build_opener(proxy_handler)
-	contenido = None
-	cabezeras = {}
-	estado = None
-	try:
-		f = opener.open(req)
-		estado = f.code
-		contenido = f.read()
-		cabezeras = f.headers.dict
-		f.close()
-		opener.close()
-	except urllib2.HTTPError as er:
-		logging.error("Acceso fallido a %s --> %s"%(url, er))
-		cabezeras = er.headers.dict
-		if estado is None:
-			estado = er.code
-		if estado is None:
-			estado = er.errno
-	finally:
-		return (contenido, cabezeras, estado)
-
-def wget_url(url, cabezera={}, tipo="GET", post=None):
-	if CONF.has_option("conexion", "proxy") and CONF.getboolean("conexion", "proxy"):
-		return proxy_wget(url, cabezera)
-	url = urlparse.urlparse(url)
-	dominio = url.netloc
-	if url.hostname:
-		dominio = url.hostname
-	if url.port:
-		dominio += ":"+str(url.port)
-	path = "/"
-	if url.path:
-		path = url.path
-	if url.query:
-		path += "?"+url.query
-	if url.fragment:
-		path += "#"+url.fragment
-	return wget(dominio, path, cabezera, tipo, post)
-
-
-from celery import task
-@task
-def envia_alerta(aviso):
-	aviso['enviado'] = True
-	logging.info("Notificar a %s sobre '%s' en el BOE: %s"%(aviso['usuario'], aviso['alias'], aviso['boe']))
-
-@task
-def procesa_boe(id, rapido=False):
-	url = "http://boe.es/diario_boe/xml.php?id=%s"%id
-	(contenido, headers, estado) = wget_url(url)
-	if estado != httplib.OK:
-		#TODO Notificar como malformado?
-		logging.error("Error %s al acceder al BOE: %s"%(estado, id))
-		return
-	p = None
-	if id.startswith('BOE-A'):
-		if rapido:
-			reglas = basededatos.Regla(DB)
-			reglas.list(0,{'tipo':'A'},[],1)
-			if reglas['total'] == 0:
-				return
-		p = BoeAParser(id)
-	elif id.startswith('BOE-B'):
-		if rapido:
-			reglas = basededatos.Regla(DB)
-			reglas.list(0,{'tipo':'B'},[],1)
-			if reglas['total'] == 0:
-				return
-		p = BoeBParser(id)
-	elif id.startswith('BOE-S'):
-		if rapido:
-			reglas = basededatos.Regla(DB)
-			reglas.list(0,{'$or':[{'tipo':'S'},{'tipo':'A'},{'tipo':'B'}]},[],1)
-			if reglas['total'] == 0:
-				return
-		p = BoeSParser(id)
-	if p is None:
-		raise ValueError("Id '%s' no soportado"%id)
-	p.feed(contenido)
-	if isinstance(p, BoeSParser):
-		logging.info("Hoy hay un total de %s BOES para procesar"%(len(p.boes)))
-		for boe_id in p.boes:
-			#procesa_boe.apply_async([boe_id, rapido])#Celery
-			procesa_boe(boe_id, rapido)
 
 class BoeDiaParser(HTMLParser):
 	URL_DATE_FORMAT = "http://boe.es/boe/dias/%Y/%m/%d/"
@@ -139,22 +29,17 @@ class BoeDiaParser(HTMLParser):
 	def __init__(self, dt_dia=None):
 		HTMLParser.__init__(self)
 		self.en_link = False
-		self.boe_id = None
+		self.boe = None
 		if dt_dia is None:
 			dt_dia = datetime.now()
-		url = dt_dia.strftime(BoeDiaParser.URL_DATE_FORMAT)
-		(contenido, headers, estado) = wget_url(url)
+		self.url = dt_dia.strftime(BoeDiaParser.URL_DATE_FORMAT)
 
-		if estado != httplib.OK:
-			logging.info("Respuesta %s Cabezeras %s"%(estado, headers))
-			raise ValueError("dt_dia debe se un dia con algun BOE publicado")
-		self.feed(contenido.decode('utf-8', 'replace'))
 	def handle_starttag(self, tag, attrs):
 		if tag == 'li' and BoeDiaParser.has_attr(attrs, "class", "puntoXML"):
 			self.en_link = True
 		elif self.en_link and tag == 'a':
 			href_xml = get_attr(attrs, 'href')
-			self.boe_id = href_xml[href_xml.rfind("=")+1:]
+			self.boe = href_xml[href_xml.rfind("=")+1:]
 	def handle_endtag(self, tag):
 		if self.en_link and (tag == 'li' or tag == 'a'):
 			self.en_link = False
@@ -162,23 +47,26 @@ class BoeDiaParser(HTMLParser):
 class BasicParser():
 	def __init__(self, boe):
 		self.boe = boe
+		self.en_fecha = False
+		self.fecha = None
 		self.en_titulo = False
 		self.titulo = ""
 		self.p = ParserCreate()
 		self.p.StartElementHandler = self.handle_starttag
 		self.p.EndElementHandler = self.handle_endtag
 		self.p.CharacterDataHandler = self.handle_data
-		self.re_cache = {}
+		self.re_cache = {}#Para tener cache hay que inicializar re_cache={'titulo':{}}
 		self.tipo = None
 		self.claves = ["re_titulo","departamento"]
+		self.to_alert = []
 	def feed(self, contenido):
 		self.p.Parse(contenido)
 	def alert(self, regla):
-		alertas = basededatos.Alertas(DB)
-		av = alertas.add(regla, self.boe)
-		if not 'enviado' in av or not av['enviado']:
-			envia_alerta(av)
-			#alert.apply_async([elem['usuario'], self.boe])#Celery
+		db_obj = Alertas(DB)
+		db_obj.add(regla, self.boe, self.fecha)
+		if not 'enviado' in db_obj or db_obj['enviado']:
+			self.to_alert.append(db_obj)
+
 	def alertAll(self, query):
 		if self.tipo:
 			query['tipo'] = self.tipo
@@ -186,7 +74,7 @@ class BasicParser():
 			if not clave in query:
 				query[clave] = {'$exists':False}
 
-		reglas = basededatos.Regla(DB)
+		reglas = Regla(DB)
 		encontradas = {'total':1}
 		pag = 0
 		while encontradas['total']>pag:
@@ -204,7 +92,7 @@ class BasicParser():
 			if not clave in query:
 				query[clave] = {'$exists':False}
 
-		reglas = basededatos.Regla(DB)
+		reglas = Regla(DB)
 		encontradas = {'total':1}
 		pag = 0
 		while encontradas['total']>pag:
@@ -212,19 +100,21 @@ class BasicParser():
 			for elem in encontradas['data']:
 				tre = elem['re_'+cache]
 				s = False
-				m = False
+				#m = False
 				if cache and cache in self.re_cache and tre in self.re_cache[cache]:
 					s = self.re_cache[cache][tre]['search']
-					m = self.re_cache[cache][tre]['match']
-				if s is False and m is False:
+					#m = self.re_cache[cache][tre]['match']
+				else:
 					tre = re.compile(elem['re_'+cache])
-					s = tre.search(paja)
-					m = tre.match(paja)
+					s_ = tre.search(paja)
+					s = s_ is not None
+					#m_ = tre.match(paja) is not None
+					#m = m_ is not None
 					if cache and cache in self.re_cache:
-						self.re_cache[cache][tre] = { 'search':s, 'match':m }
-				if s is not None or m is not None:
-					logging.debug("search %s"%s)
-					logging.debug("match %s"%m)
+						self.re_cache[cache][tre] = { 'search':s}#, 'match':m }
+				if s:# or m:
+					#logging.debug("search %s %s"%(s,tre))
+					#logging.debug("match %s %s"%(m,tre))
 					self.alert(elem)
 			pag += 1
 	def handle_starttag(self, tag, attrs):
@@ -237,15 +127,17 @@ class BasicParser():
 class BoeSParser(BasicParser):
 	def __init__(self, boe):
 		BasicParser.__init__(self, boe)
-		self.act_sec = basededatos.PalagraClave(DB)
-		self.act_dep = basededatos.PalagraClave(DB)
-		self.act_epi = basededatos.PalagraClave(DB)
+		self.act_sec = PalagraClave(DB)
+		self.act_dep = PalagraClave(DB)
+		self.act_epi = PalagraClave(DB)
 		self.malformado = False
 		self.boes = []
 		self.tipo = 'S'
 		self.claves = ["seccion","departamento","epigrafe","re_titulo"]
 	def handle_starttag(self, tag, attrs):
-		if tag in ['seccion','departamento','epigrafe']:
+		if tag == 'fechaInv':
+			self.en_fecha = True
+		elif tag in ['seccion','departamento','epigrafe']:
 			valor = attrs['nombre'].strip()
 			if tag == 'seccion':
 				self.act_sec[tag] = valor
@@ -272,7 +164,9 @@ class BoeSParser(BasicParser):
 		elif tag == 'titulo':
 			self.en_titulo = True
 	def handle_endtag(self, tag):
-		if tag == 'seccion':
+		if tag == 'fechaInv':
+			self.en_fecha = False
+		elif tag == 'seccion':
 			self.act_sec.id = None
 		elif tag == 'departamento':
 			self.act_dep.id = None
@@ -300,8 +194,10 @@ class BoeSParser(BasicParser):
 		elif self.en_titulo and tag == 'img':
 			self.malformado = True
 	def handle_data(self, data):
-		if self.en_titulo:
-			self.titulo += data
+		if self.en_fecha:
+			self.fecha = datetime.strptime(data.strip(), FORMATO_FECHA)
+		elif self.en_titulo:
+			self.titulo += data.strip()
 
 class BoeTexto(BasicParser):
 	def __init__(self, boe):
@@ -320,7 +216,7 @@ class BoeTexto(BasicParser):
 		query['re_texto'] = {'$exists':True}
 		query['re_titulo'] = {'$exists':True}
 
-		reglas = basededatos.Regla(DB)
+		reglas = Regla(DB)
 		encontradas = {'total':1}
 		pag = 0
 		while encontradas['total']>pag:
@@ -328,43 +224,47 @@ class BoeTexto(BasicParser):
 			for elem in encontradas['data']:
 				tire = elem['re_titulo']
 				tis = False
-				tim = False
+				#tim = False
 				if tire in self.re_cache['titulo']:
 					tis = self.re_cache['titulo'][tire]['search']
-					tim = self.re_cache['titulo'][tire]['match']
-				if tis is False and tim is False:
+					#tim = self.re_cache['titulo'][tire]['match']
+				else:
 					tre = re.compile(tire)
-					tis = tre.search(self.titulo)
-					tim = tre.match(self.titulo)
+					tis_ = tre.search(self.titulo)
+					tis = tis_ is not None
+					#tim_ = tre.match(self.titulo)
+					#tim = tim_ is not None
 					if cache:
-						self.re_cache['titulo'][tire] = { 'search':tis, 'match':tim }
+						self.re_cache['titulo'][tire] = { 'search':tis}#, 'match':tim }
 
 				tore = elem['re_texto']
 				tos = False
-				tom = False
+				#tom = False
 				if tore in self.re_cache['texto']:
 					tos = self.re_cache['texto'][tore]['search']
-					tom = self.re_cache['texto'][tore]['match']
-				if tos is False and tom is False:
+					#tom = self.re_cache['texto'][tore]['match']
+				else:
 					tre = re.compile(tire)
-					tos = tre.search(self.texto)
-					tom = tre.match(self.texto)
+					tos_ = tre.search(self.texto)
+					tos = tos_ is not None
+					#tom_ = tre.match(self.texto)
+					#tom = tom_ is not None
 					if cache:
-						self.re_cache['titulo'][tore] = { 'search':tos, 'match':tom }
-				if tis is not None and tos:
+						self.re_cache['titulo'][tore] = { 'search':tos}#, 'match':tom }
+				if tis and tos:
 					logging.debug("search Titulo: %s Texto: %s"%(tis, tos))
 					self.alert(elem)
-				if tim is not None and tom:
-					logging.debug("match Titulo: %s Texto: %s"%(tim, tom))
-					self.alert(elem)
+				#elif tim and tom:#esif por que ya ha sido alertado
+				#	logging.debug("match Titulo: %s Texto: %s"%(tim, tom))
+				#	self.alert(elem)
 			pag += 1
 
 class BoeAParser(BoeTexto):
 	def __init__(self, boe):
 		BoeTexto.__init__(self, boe)
-		self.departamento = basededatos.PalagraClave(DB)
+		self.departamento = PalagraClave(DB)
 		self.en_departamento = False
-		self.origen_legislativo = basededatos.PalagraClave(DB)
+		self.origen_legislativo = PalagraClave(DB)
 		self.en_origen_legislativo = False
 		self.materias = []
 		self.en_materia = False
@@ -482,7 +382,9 @@ class BoeAParser(BoeTexto):
 							self.alertTT({'alerta':{'$in':self.alertas},'departamento':self.departamento.id,'origen_legislativo':self.origen_legislativo.id,'materia':{'$in':self.materias},'malformado':True})
 
 	def handle_starttag(self, tag, attrs):
-		if tag == 'departamento':
+		if tag == 'fecha_publicacion':
+			self.en_fecha = True
+		elif tag == 'departamento':
 			self.en_departamento = True
 		elif tag == 'origen_legislativo':
 			self.en_origen_legislativo = True
@@ -497,7 +399,9 @@ class BoeAParser(BoeTexto):
 		elif (self.en_texto or self.en_titulo) and tag == 'img':
 			self.malformado = True
 	def handle_endtag(self, tag):
-		if tag == 'departamento':
+		if tag == 'fecha_publicacion':
+			self.en_fecha = False
+		elif tag == 'departamento':
 			self.en_departamento = False
 			if self.departamento.id:
 				self.alertAll({'departamento':self.departamento.id,'malformado':False})
@@ -518,20 +422,22 @@ class BoeAParser(BoeTexto):
 		elif (self.en_texto or self.en_titulo) and tag == 'img':
 			self.malformado = True
 	def handle_data(self, data):
-		if self.en_departamento:
+		if self.en_fecha:
+			self.fecha = datetime.strptime(data.strip(), "%Y%m%d")
+		elif self.en_departamento:
 			self.departamento['departamento'] = data.strip()
 			self.en_departamento = False
 		elif self.en_origen_legislativo:
 			self.origen_legislativo['origen_legislativo'] = data.strip()
 			self.en_origen_legislativo = False
 		elif self.en_materia:
-			pc = basededatos.PalagraClave(DB)
+			pc = PalagraClave(DB)
 			pc['materia'] = data.strip()
 			if pc.id:
 				self.materias.append(pc.id)
 			self.en_materia = False
 		elif self.en_alerta:
-			pc = basededatos.PalagraClave(DB)
+			pc = PalagraClave(DB)
 			pc['alerta'] = data.strip()
 			if pc.id:
 				self.alertas.append(pc.id)
@@ -545,7 +451,7 @@ class BoeBParser(BoeTexto):
 	def __init__(self, boe):
 		BoeTexto.__init__(self, boe)
 		self.en_departamento = False
-		self.departamento = basededatos.PalagraClave(DB)
+		self.departamento = PalagraClave(DB)
 		self.malformado = False
 		self.re_cache['titulo'] = {}
 		self.re_cache['texto'] = {}
@@ -569,7 +475,9 @@ class BoeBParser(BoeTexto):
 			self.alertTT({'malformado':True})
 
 	def handle_starttag(self, tag, attrs):
-		if tag == 'titulo':
+		if tag == 'fecha_publicacion':
+			self.en_fecha = True
+		elif tag == 'titulo':
 			self.en_titulo = True
 		elif tag == 'departamento':
 			self.en_departamento = True
@@ -578,7 +486,9 @@ class BoeBParser(BoeTexto):
 		elif (self.en_texto or self.en_titulo) and tag == 'img':
 			self.malformado = True
 	def handle_endtag(self, tag):
-		if tag == 'titulo':
+		if tag == 'fecha_publicacion':
+			self.en_fecha = False
+		elif tag == 'titulo':
 			self.en_titulo = False
 			self.alertTitulo({'malformado':False})
 		elif tag == 'departamento':
@@ -591,7 +501,9 @@ class BoeBParser(BoeTexto):
 		elif (self.en_texto or self.en_titulo) and tag == 'img':
 			self.malformado = True
 	def handle_data(self, data):
-		if self.en_departamento:
+		if self.en_fecha:
+			self.fecha = datetime.strptime(data.strip(), "%Y%m%d")
+		elif self.en_departamento:
 			self.departamento['departamento'] = data.strip()
 		elif self.en_titulo:
 			self.titulo += data.strip()
@@ -599,41 +511,24 @@ class BoeBParser(BoeTexto):
 			self.texto += data.strip()
 
 
-if __name__ == "__main__":
-	import argparse
-	from datetime import timedelta
-	FORMATO_FECHA = "%Y/%m/%d"
-	parser = argparse.ArgumentParser(description='Procesado de Alertas del BOE.')
-	parser.add_argument('inicio',
-						default=datetime.now().strftime(FORMATO_FECHA),
-						type=str,
-						help='Fecha de inicio en formato AAAA/MM/DD, por defecto hoy',
-						metavar='AAAA/MM/DD'
-						)
-	parser.add_argument('--fin',
-						default=datetime.now().strftime(FORMATO_FECHA),
-						type=str,
-						help='Fecha de fin en formato AAAA/MM/DD, por defecto hoy',
-						metavar='AAAA/MM/DD'
-						)
-	parser.add_argument('--rapido',
-						action='store_true',
-						default=False,
-						help='No analiza si no hay posibles reglas aplicables'
-						)
+def boeToParser(id, rapido):
+	query = {}
+	constructor = None
 
-	args = parser.parse_args()
-	inicio = datetime.strptime(args.inicio, FORMATO_FECHA)
-	fin = datetime.strptime(args.fin, FORMATO_FECHA)
-	undia = timedelta(1)
+	if id.startswith('BOE-A'):
+		query = {'tipo':'A'}
+		constructor = BoeAParser
+	elif id.startswith('BOE-B'):
+		query = {'tipo':'B'}
+		constructor = BoeBParser
+	elif id.startswith('BOE-S'):
+		query = {'$or':[{'tipo':'S'},{'tipo':'A'},{'tipo':'B'}]}
+		constructor = BoeSParser
 
-	while inicio <= fin:
-		try:
-			boe_parser = BoeDiaParser(inicio)
-			procesa_boe(boe_parser.boe_id, args.rapido)
-		except ValueError:
-			pass
-		inicio += undia
-
-
-
+	if constructor is None:
+		return
+	if rapido:
+		reglas = Regla(DB).list(0,query,[],1)
+		if reglas['total'] == 0:
+			return
+	return constructor(id)

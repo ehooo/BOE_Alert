@@ -20,9 +20,9 @@ Sistema de procesado y alertar para el BOE (Boletin Oficial del Estado).<br/>
 Consta de dos scripts principales:
 
 * pagina.py: Aplicacion para WebPy que permite insertar reglas y configurar el modo de alerta.
-* boe_parser.py: Que procesa el BOE de un dia dado, o el ultimo publicado.
+* scan.py: Que procesa el BOE de un dia dado, o el ultimo publicado.
 
-El programa `boe_parser.py` se encarga de procesar el BOE haciendo uso de 
+El programa `scan.py` se encarga de procesar el BOE haciendo uso de 
 ficheros xml del [portal oficial](http://boe.es/diario_boe/) y 
 comparandolos con expresiones regurales y otros filtros.
 
@@ -36,7 +36,7 @@ comparandolos con expresiones regurales y otros filtros.
 
 Para configurar web.py con servidor web consultar la [documentacion de web.py](http://webpy.org/cookbook/)
 
-#Fichero de Configuracion
+#Fichero de Configuracion `boe.conf`
 * [db]
  * host = IP del servidor MongoDB
  * puerto = Puerto del servidor MongoDB
@@ -47,14 +47,16 @@ Para configurar web.py con servidor web consultar la [documentacion de web.py](h
  * formato= En el [formato de logging python](http://docs.python.org/2/library/logging.html#logrecord-attributes) cambiando los % por $ 
  * nivel = Un valor entre 'DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'
 * [celery]
+ * activo = Un valor Verdadero o Falso para [ConfigParser](http://docs.python.org/2/library/#ConfigParser.RawConfigParser.getboolean) para activar Celery
  * simultaneos = Numero de procesos simultaneos para analizar los distintos BOEs
+ * meta = Valor para el parametro [taskmeta_collection](http://docs.celeryq.org/en/latest/configuration.html#celery-mongodb-backend-settings)
  * formato_log = Usado en la clave CELERYD\_LOG_FORMAT en el [formato de logging python](http://docs.python.org/2/library/logging.html#logrecord-attributes) cambiando los % por $
  * formato_log_tareas = Usado en la clave CELERYD\_TASK\_LOG\_FORMAT en el [formato de logging python](http://docs.python.org/2/library/logging.html#logrecord-attributes) cambiando los % por $
 * [web]
  * debug = Un valor Verdadero o Falso para [ConfigParser](http://docs.python.org/2/library/#ConfigParser.RawConfigParser.getboolean)
  * tema = Path donde se encuentra las plantillas de la web
 * [conexion]
- * proxy = debug = Un valor Verdadero o Falso para [ConfigParser](http://docs.python.org/2/library/#ConfigParser.RawConfigParser.getboolean)
+ * proxy = (OPCIONAL) Un valor Verdadero o Falso para [ConfigParser](http://docs.python.org/2/library/#ConfigParser.RawConfigParser.getboolean)
 permite usar como salida a intenet el proxy configurado en el equipo, util si se quiere usar en universidades, ...
 
 # Dependencias:
@@ -66,6 +68,7 @@ permite usar como salida a intenet el proxy configurado en el equipo, util si se
 * [Bootstrap](http://getbootstrap.com/getting-started/)
 * [jQuery](http://jquery.com/download/)
 * [DataTables](http://datatables.net/download/)
+* [Mnemo Filetype Icons](http://www.iconarchive.com/show/mnemo-icons-by-hechiceroo.html)
 
 #Puesta a punto
 Antes de insertar reglas en el sistema es recomendame nutrilo con los datos como:
@@ -74,10 +77,10 @@ que nos permitiran generar alertas genericas sobre apartados contretos, cuanto m
 BOEs procesados mayor numero de opciones, si aparecen nuevas se van insertando con cada analisis.
 <pre>
 $ python boe_parser.py 2013/01/01 --fin 2013/11/11
-
 $ python pagina.py
 </pre>
-Y acceder a 127.0.0.1:8080/reglas para ver el portal de administracion.<br/>
+Si se tiene Celery esta activo, debes ejecutar `celery worker` o `celeryd`. Para que se procesen los distintos BOEs en paralelo.<br/>
+Y acceder a 127.0.0.1:8080 para ver el portal de administracion.<br/>
 Por ultimo es recomendable configurar un cron para que automatize todos los dias el analisis del BOE nuevo.
 
 #Sobre las Reglas
@@ -95,11 +98,10 @@ Procesa desde el 2013 hasta hoy
 Procesa todo el 2012
 `$ python boe_parser.py 2012/01/01 --fin 2013/01/01`
 
-Procesa todo el 2012 solo si hay reglas, util si solo se tiene reglas de un tipo
+Procesa todo el 2012 solo si hay reglas, util si solo se tiene reglas de un tipo NO recomendado
 `$ python boe_parser.py 2012/01/01 --fin 2013/01/01 --rapido`
 
 # TODO
-* Aplicar Celery
 * Pagina Acerca
 * Hacer uso de Celery para la busqueda de expresiones regulares
 * Mejorar el Sistema deteccion de reglas

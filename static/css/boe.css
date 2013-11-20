@@ -1,5 +1,6 @@
-.nav li:first-child a{ color: #B94A48; }
-.nav li.active:first-child a{ background-color: #F2DEDE; }
+.nav li:first-child a, .nav li:first-child a span.badge{ color: #B94A48; }
+.nav li.active:first-child a, .nav li:first-child a span.badge{ background-color: #F2DEDE; }
+.nav li.active:first-child a span.badge{ background-color: #FFF; }
 
 #alertas_usuario .panel-info .panel-heading { display: flex; }
 #alertas_usuario legend { padding-left: 5px; }
@@ -8,3 +9,4 @@
 .dataTable tr.odd.row_selected, .dataTable tr.even.row_selected{ background: #CCC; }
 .dataTable tr.odd.row_selected td.sorting_1, .dataTable tr.even.row_selected td.sorting_1{ background: #CCB; }
 
+#alertas_boe img{ height: 25px; }

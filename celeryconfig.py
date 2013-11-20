@@ -1,10 +1,10 @@
-from utilidades import cargar_conf, get_mongo_uri
-CONF = cargar_conf()
+from boe.utils import cargar_conf, get_mongo_uri, FICHERO_CONFIGURACION
+CONF = cargar_conf(FICHERO_CONFIGURACION)
 
 BROKER_URL = get_mongo_uri(CONF)
 
 CELERYD_CONCURRENCY = CONF.getint("celery","simultaneos")
-CELERY_IMPORTS = ("boe_parser", )
+CELERY_IMPORTS = ("boe.processing", )
 #CELERY_INCLUDE = ("tasks", )
 
 CELERYD_LOG_FORMAT = CONF.get("celery","formato_log").replace('$','%')
@@ -12,16 +12,16 @@ CELERYD_TASK_LOG_FORMAT = CONF.get("celery","formato_log_tareas").replace('$','%
 
 CELERY_REDIRECT_STDOUTS_LEVEL = CONF.get('log', "nivel")
 
-'''
 CELERY_BACKEND = "mongodb"
 CELERY_MONGODB_BACKEND_SETTINGS = {
-    "host": "localhost",
-    "port": 27017,
-    "database": "mydb",
-    "taskmeta_collection": "celery_taskmeta",
-	"max_pool_size": 10
+    "host": CONF.get("db","host"),
+    "port": CONF.getint("db","puerto"),
+    "database": CONF.get("db","nombre"),
+    "taskmeta_collection": CONF.get("celery","meta"),
+	"max_pool_size": CELERYD_CONCURRENCY+1
 }
 
+'''
 # Enables error emails.
 CELERY_SEND_TASK_ERROR_EMAILS = True
 # Name and email addresses of recipients

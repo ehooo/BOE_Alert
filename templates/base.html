@@ -31,9 +31,9 @@
 <div class="header">
 <ul class="nav nav-pills pull-right">
 $if content.seccion and content.seccion == 'alertas':
-	<li class="active"><a href="#">alertas</a></li>
+	<li class="active"><a href="#">alertas <span id="total_alertas" class="badge"></span></a></li>
 $else:
-	<li><a href="/alertas">alertas</a></li>
+	<li><a href="/alertas">alertas <span id="total_alertas" class="badge"></span></a></li>
 $if content.seccion and content.seccion == 'usuario':
 	<li class="active"><a href="#">usuario</a></li>
 $else:

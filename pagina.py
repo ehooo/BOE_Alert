@@ -5,10 +5,12 @@ sys.path.append(abspath)
 if abspath!='':
 	os.chdir(abspath)
 
-import basededatos
-from utilidades import cargar_conf, cifrar_id, descifrar_id
-CONF = cargar_conf()
-DB = basededatos.DBConnector(CONF)
+from boe.db import DBConnector, Usuario, PalagraClave, Regla, Alertas
+from boe.utils import cargar_conf, cifrar_id, descifrar_id, FICHERO_CONFIGURACION
+import logging
+
+CONF = cargar_conf(FICHERO_CONFIGURACION)
+DB = DBConnector(CONF)
 
 import web
 if CONF.has_option("web", "cookie_name"):
@@ -28,7 +30,7 @@ URLS = (
 	'/(acerca)?', 'Estatico',
 	'/usuario', 'DatosUsuario',
 	'/reglas', 'AdminReglas',
-	'/alertas', 'Alertas',
+	'/alertas', 'AvisoAlertas',
 	'/reglas/S', 'BOE_S',#Interfaz Json
 	'/reglas/A', 'BOE_A',#Interfaz Json
 	'/reglas/B', 'BOE_B',#Interfaz Json
@@ -93,7 +95,7 @@ class Estatico(DefaultWeb):
 class DatosUsuario(DefaultWeb):
 	@staticmethod
 	def get_usuario():
-		usuario = basededatos.Usuario(DB)
+		usuario = Usuario(DB)
 		res = usuario.list()
 		if res['total'] > 0:
 			return res['data'][0]
@@ -141,7 +143,7 @@ class DatosUsuario(DefaultWeb):
 			if i.get('sms'):
 				usuario['sms']=i.get('sms')
 		#'''
-		self.GET([])
+		return self.GET([])
 
 class AdminReglas(DefaultWeb):
 	def GET(self):
@@ -159,7 +161,7 @@ class AdminReglas(DefaultWeb):
 			if lista not in ["seccion","departamento","epigrafe","origen_legislativo","materia","alerta"]:
 				web.header('Content-Type', 'application/json')
 				raise web.NotFound(json.dumps({"error":"listado %s no valido"%i.get('listado')}))
-			pc = basededatos.PalagraClave(DB)
+			pc = PalagraClave(DB)
 			ret = pc.list(0,{lista:{'$exists': True}},[(lista,1)],200)
 			web.header('Content-Type', 'application/json')
 			return json.dumps(ret['data'], cls=ComplexEncoder)
@@ -170,13 +172,13 @@ from datetime import datetime
 class ComplexEncoder(json.JSONEncoder):
 	def default(self, obj):
 		if isinstance(obj, datetime):
-			return obj.isoformat()
-		elif isinstance(obj, basededatos.Regla):
+			return obj.strftime("%Y/%m/%d")
+		elif isinstance(obj, Regla):
 			return str(obj)
-		elif isinstance(obj, basededatos.PalagraClave):
+		elif isinstance(obj, PalagraClave):
 			return str(obj)
-		elif isinstance(obj, basededatos.Alertas):
-			return [obj['boe'], obj['alias']]
+		elif isinstance(obj, Alertas):
+			return [obj['boe'], obj['fecha'], obj['alias']]
 		return json.JSONEncoder.default(self, obj)
 
 class TablaBase(DefaultWeb):
@@ -242,20 +244,28 @@ class TablaBase(DefaultWeb):
 				pass
 		return (pag, busquedas, sort, tamXpag)
 
-class Alertas(TablaBase):
+class AvisoAlertas(TablaBase):
 	COLUMNAS = [
 		{ 'title':'boe',	'width':'30%'},
-		{ 'title':'alias',	'width':'70%'}
+		{ 'title':'fecha',	'width':'20%'},
+		{ 'title':'alias',	'width':'40%'}
 	]
 	def GET(self):
 		TablaBase.GET(self)
 		return RENDER_BASE.alertas(self.__class__.COLUMNAS)
 	def POST(self):
 		TablaBase.POST(self)
-		borrar = web.input().get('borrar')
-		db_obj = basededatos.Alertas(DB)
+		i = web.input()
+		borrar = i.get('borrar')
+		db_obj = Alertas(DB)
 		usuario = DatosUsuario.get_usuario()
 		web.header('Content-Type', 'application/json')
+
+		if i.get('total'):
+			elements = db_obj.list(0, {'usuario':usuario.id}, [], 1)
+			return json.dumps({'total':elements['total']})
+
+		borrar = i.get('borrar')
 		if borrar is not None:
 			elements = db_obj.list(0, {'boe':borrar,'usuario':usuario.id}, [], 1)
 			if len(elements['data'])>0:
@@ -300,7 +310,7 @@ class TablaReglasBase(TablaBase):
 					if candidata is None or len(candidata.strip())==0:
 						post_valido = True
 					elif clave in ["seccion","departamento","epigrafe","origen_legislativo","materia","alerta"]:
-						pc = basededatos.PalagraClave(DB)
+						pc = PalagraClave(DB)
 						elements = pc.list(0, {clave:candidata}, [], 1)
 						if elements['total'] > 0 and len(elements['data'])>0:
 							query[clave] = elements['data'][0]
@@ -323,7 +333,7 @@ class TablaReglasBase(TablaBase):
 	def POST(self):
 		TablaBase.POST(self)
 		usuario = DatosUsuario.get_usuario()
-		db_obj = basededatos.Regla(DB)
+		db_obj = Regla(DB)
 		borrar = web.input().get('borrar')
 		web.header('Content-Type', 'application/json')
 		if borrar is not None:
@@ -344,7 +354,7 @@ class TablaReglasBase(TablaBase):
 
 class SEncoder(ComplexEncoder):
 	def default(self, obj):
-		if isinstance(obj, basededatos.Regla):
+		if isinstance(obj, Regla):
 			ret = []
 			for fila in BOE_S.COLUMNAS:
 				clave = None
@@ -354,7 +364,7 @@ class SEncoder(ComplexEncoder):
 					clave = fila['select']
 				if clave:
 					if clave in ["seccion","departamento","epigrafe","origen_legislativo","materia","alerta"]:
-						pc = basededatos.PalagraClave(DB)
+						pc = PalagraClave(DB)
 						pc.id = obj[clave]
 						ret.append(str(pc))
 					else:
@@ -383,7 +393,7 @@ class BOE_S(TablaReglasBase):
 			if len(alias.strip())==0:
 				error = json.dumps({"error":"Debe insertar un alias"})
 			elif query:
-				db_obj = basededatos.Regla(DB)
+				db_obj = Regla(DB)
 				ret = db_obj.add_rule_S(DatosUsuario.get_usuario(), alias, query['seccion'], query['departamento'], query['epigrafe'], query['re_titulo'])
 				self.securizar_cabezera()
 				return json.dumps({"ok":"Regla insertada"})
@@ -398,7 +408,7 @@ class BOE_S(TablaReglasBase):
 
 class AEncoder(ComplexEncoder):
 	def default(self, obj):
-		if isinstance(obj, basededatos.Regla):
+		if isinstance(obj, Regla):
 			ret = []
 			for fila in BOE_A.COLUMNAS:
 				clave = None
@@ -408,7 +418,7 @@ class AEncoder(ComplexEncoder):
 					clave = fila['select']
 				if clave:
 					if clave in ["seccion","departamento","epigrafe","origen_legislativo","materia","alerta"]:
-						pc = basededatos.PalagraClave(DB)
+						pc = PalagraClave(DB)
 						pc.id = obj[clave]
 						ret.append(str(pc))
 					else:
@@ -440,7 +450,7 @@ class BOE_A(TablaReglasBase):
 			if len(alias.strip())==0:
 				error = json.dumps({"error":"Debe insertar un alias"})
 			elif query:
-				db_obj = basededatos.Regla(DB)
+				db_obj = Regla(DB)
 				ret = db_obj.add_rule_A(DatosUsuario.get_usuario(), alias, query['malformado'], query['re_titulo'], query['departamento'], query['origen_legislativo'], query['materia'], query['alerta'], query['re_texto'])
 				self.securizar_cabezera()
 				return json.dumps({"ok":"Regla insertada"})
@@ -455,7 +465,7 @@ class BOE_A(TablaReglasBase):
 
 class BEncoder(ComplexEncoder):
 	def default(self, obj):
-		if isinstance(obj, basededatos.Regla):
+		if isinstance(obj, Regla):
 			ret = []
 			for fila in BOE_B.COLUMNAS:
 				clave = None
@@ -465,7 +475,7 @@ class BEncoder(ComplexEncoder):
 					clave = fila['select']
 				if clave:
 					if clave in ["seccion","departamento","epigrafe","origen_legislativo","materia","alerta"]:
-						pc = basededatos.PalagraClave(DB)
+						pc = PalagraClave(DB)
 						pc.id = obj[clave]
 						ret.append(str(pc))
 					else:
@@ -494,7 +504,7 @@ class BOE_B(TablaReglasBase):
 			if len(alias.strip())==0:
 				error = json.dumps({"error":"Debe insertar un alias"})
 			elif query:
-				db_obj = basededatos.Regla(DB)
+				db_obj = Regla(DB)
 				ret = db_obj.add_rule_B(DatosUsuario.get_usuario(), alias, query['malformado'], query['re_titulo'], query['departamento'], query['re_texto'])
 
 				self.securizar_cabezera()

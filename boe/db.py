@@ -1,6 +1,7 @@
+from utils import get_mongo_uri
+
 from pymongo import Connection
 import logging
-from utilidades import get_mongo_uri
 
 class DBConnector():
 	def __init__(self, conf):
@@ -84,14 +85,14 @@ class Usuario(DBObject):
 	pass
 
 class Alertas(DBObject):
-	def add(self, regla, boe):
+	def add(self, regla, boe, fecha):
 		assert regla is None or isinstance(regla, Regla) or regla.id is None
 		res = self.getConexion().find_one({'usuario':regla['usuario'],'boe':boe}, fields=["_id"])
 		push_id = None
 		if res and "_id" in res:
 			push_id = res["_id"]
 		else:
-			push_id = self.getConexion().insert({'usuario':regla['usuario'], 'boe':boe})
+			push_id = self.getConexion().insert({'usuario':regla['usuario'], 'boe':boe, 'fecha':fecha})
 		if push_id:
 			self.getConexion().update({ '_id':push_id, 'alias':{"$ne":regla['alias']}}, {"$push":{'alias':regla['alias']}} )
 			ret = self.__new__(self.__class__)
