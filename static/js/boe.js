@@ -59,7 +59,7 @@ function pagina_alertas(){
 		"sServerMethod": "POST",
         "sAjaxSource": "/alertas",
 		"oTableTools": { "sRowSelect": "single" },
-		"fnDrawCallback":check_buton,
+		"fnDrawCallback":check_boton,
 		"fnRowCallback": prepare_row
     } );
 	
@@ -70,7 +70,7 @@ function pagina_alertas(){
 		'disabled':'disabled'
 	});
 	$(".borrar_alerta").wrap(boton);
-	
+
 	$('#alertas_boe_wrapper .borrar_alerta').parent().click(function(){
 		var post_data = $(this.parentNode).find('tr.row_selected');
 		post_data = {'borrar':post_data.attr('id')};
@@ -85,14 +85,9 @@ function pagina_alertas(){
 		});
 	});
 
-	function check_buton(element){
-		var table = this;
-		if (!(this instanceof Window))
-			element = this;
-		else
-			table = $(element).parent();
-		var a = $(element).parentsUntil('.panel-body').find('.borrar_alertas').parent();
-		var b = $(table).find('tr.row_selected').length;
+	function check_boton(){
+		var a = $('#alertas_boe_wrapper .borrar_alerta').parent();
+		var b = $('#alertas_boe').find('tr.row_selected').length;
 		if (b > 0){
 			a.removeAttr('disabled');
 		}else{
@@ -131,7 +126,7 @@ function pagina_alertas(){
 				$(this.parentNode).children('tr.row_selected').removeClass('row_selected');
 				$(this).addClass('row_selected');
 			}
-			check_buton(e.currentTarget);
+			check_boton();
 		});
 	};
 };

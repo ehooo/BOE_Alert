@@ -1,25 +1,17 @@
-'''
-
-'''
-
-from boe.utils import cargar_conf, wget_url, get_attr, FICHERO_CONFIGURACION
-from boe.parser import BoeDiaParser, BoeSParser, BoeAParser, BoeBParser, boeToParser
-from boe.db import DBConnector, Regla, Alertas
+from boe.utils import cargar_conf, wget_url, FICHERO_CONFIGURACION
+from boe.parser import BoeDiaParser
 from boe.processing import procesa_boe
 
 import logging, httplib, urllib2, urlparse, re
 from xml.parsers.expat import ParserCreate, ExpatError
 from datetime import datetime
 
-CONF = cargar_conf(FICHERO_CONFIGURACION)
-DB = DBConnector(CONF)
-
-FORMATO_FECHA = "%Y/%m/%d"
 
 
 if __name__ == "__main__":
 	import argparse
 	from datetime import timedelta
+	FORMATO_FECHA = "%Y/%m/%d"
 	parser = argparse.ArgumentParser(description='Procesado de Alertas del BOE.')
 	parser.add_argument('inicio',
 						default=datetime.now().strftime(FORMATO_FECHA),
@@ -43,6 +35,8 @@ if __name__ == "__main__":
 	inicio = datetime.strptime(args.inicio, FORMATO_FECHA)
 	fin = datetime.strptime(args.fin, FORMATO_FECHA)
 	undia = timedelta(1)
+	
+	CONF = cargar_conf(FICHERO_CONFIGURACION)
 
 	while inicio <= fin:
 		try:

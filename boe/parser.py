@@ -62,10 +62,9 @@ class BasicParser():
 	def feed(self, contenido):
 		self.p.Parse(contenido)
 	def alert(self, regla):
-		db_obj = Alertas(DB)
-		db_obj.add(regla, self.boe, self.fecha)
-		if not 'enviado' in db_obj or db_obj['enviado']:
-			self.to_alert.append(db_obj)
+		alerta = Alertas(DB).add(regla, self.boe, self.fecha)
+		if not 'enviado' in alerta or alerta['enviado']:
+			self.to_alert.append(alerta.id)
 
 	def alertAll(self, query):
 		if self.tipo:

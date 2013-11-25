@@ -30,6 +30,13 @@ comparandolos con expresiones regurales y otros filtros.
 * [python](http://www.python.org/download/): `# apt-get install python`
  * [easy\_install](https://pypi.python.org/pypi/setuptools): `# apt-get install python-pip`
 * [mongoDB](http://www.mongodb.org/downloads): `# apt-get install mongodb-server`
+<pre>
+sudo apt-key adv --keyserver keyserver.ubuntu.com --recv 7F0CEB10
+echo 'deb http://downloads-distro.mongodb.org/repo/debian-sysvinit dist 10gen' | sudo tee /etc/apt/sources.list.d/mongodb.list
+sudo apt-get update
+sudo apt-get install mongodb-10gen=2.4.8
+sudo /etc/init.d/mongodb status
+</pre>
 * [pymongo](http://api.mongodb.org/python/current/installation.html): `# apt-get install python-pymongo` o `# easy_install pymongo`
 * [web.py](http://webpy.org/install): `# easy_install web.py`
 * [Celery](http://www.celeryproject.org/install/): `# easy_install Celery`
