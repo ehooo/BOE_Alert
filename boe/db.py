@@ -101,7 +101,7 @@ class Alertas(DBObject):
 			return ret
 
 class PalagraClave(DBObject):
-	def __init__(self, dbConnector, palabras_clave=["seccion","departamento","epigrafe","origen_legislativo","materia","alerta"]):
+	def __init__(self, dbConnector, palabras_clave=["seccion","departamento","epigrafe","origen_legislativo","materia","alerta","materias_cpv"]):
 		DBObject.__init__(self, dbConnector)
 		self.psc = palabras_clave
 	def __setitem__(self, key, value):
@@ -187,7 +187,7 @@ class Regla(DBObject):
 			ret['re_texto'] = re_texto
 		ret.save()
 		return ret
-	def add_rule_B(self, usuario, alias, malformado=False, re_titulo=None, departamento=None, re_texto=None):
+	def add_rule_B(self, usuario, alias, malformado=False, re_titulo=None, materias_cpv=None, departamento=None, re_texto=None):
 		assert isinstance(usuario, Usuario)
 		assert alias is not None
 		assert departamento is None or isinstance(departamento, PalagraClave)

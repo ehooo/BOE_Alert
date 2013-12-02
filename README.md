@@ -40,6 +40,7 @@ sudo /etc/init.d/mongodb status
 * [pymongo](http://api.mongodb.org/python/current/installation.html): `# apt-get install python-pymongo` o `# easy_install pymongo`
 * [web.py](http://webpy.org/install): `# easy_install web.py`
 * [Celery](http://www.celeryproject.org/install/): `# easy_install Celery`
+* [Twython](https://twython.readthedocs.org/en/latest/usage/install.html): `# easy_install twython`
 
 Para configurar web.py con servidor web consultar la [documentacion de web.py](http://webpy.org/cookbook/)
 
@@ -56,20 +57,31 @@ Para configurar web.py con servidor web consultar la [documentacion de web.py](h
 * [celery]
  * activo = Un valor Verdadero o Falso para [ConfigParser](http://docs.python.org/2/library/#ConfigParser.RawConfigParser.getboolean) para activar Celery
  * simultaneos = Numero de procesos simultaneos para analizar los distintos BOEs
+ * pool = Numero de conexiones maximas
  * meta = Valor para el parametro [taskmeta_collection](http://docs.celeryq.org/en/latest/configuration.html#celery-mongodb-backend-settings)
  * formato_log = Usado en la clave CELERYD\_LOG_FORMAT en el [formato de logging python](http://docs.python.org/2/library/logging.html#logrecord-attributes) cambiando los % por $
  * formato_log_tareas = Usado en la clave CELERYD\_TASK\_LOG\_FORMAT en el [formato de logging python](http://docs.python.org/2/library/logging.html#logrecord-attributes) cambiando los % por $
 * [web]
  * debug = Un valor Verdadero o Falso para [ConfigParser](http://docs.python.org/2/library/#ConfigParser.RawConfigParser.getboolean)
  * tema = Path donde se encuentra las plantillas de la web
+ * multilogin = Permite hacer login con distintos usuarios. Un valor Verdadero o Falso para [ConfigParser](http://docs.python.org/2/library/#ConfigParser.RawConfigParser.getboolean)
+ * cookie_name = Nombre de la Cookie
+ * cookie_domain = Dominio de la Cookie
+ * cookie_salt = Salt para la Cookie __Es recomendable modificarla__
+ * cookie_dir = Path donde se encuentran almacenadas las cookies
 * [conexion]
- * proxy = (OPCIONAL) Un valor Verdadero o Falso para [ConfigParser](http://docs.python.org/2/library/#ConfigParser.RawConfigParser.getboolean)
+ * #proxy= (OPCIONAL) Un valor Verdadero o Falso para [ConfigParser](http://docs.python.org/2/library/#ConfigParser.RawConfigParser.getboolean)
 permite usar como salida a intenet el proxy configurado en el equipo, util si se quiere usar en universidades, ...
+* #[twitter]\(OPCIONAL)
+ * consumer_key = Clave Twitter
+ * consumer_secret = Clave secreta de Twitter
+ * callback = Callback para Twitter
 
 # Dependencias:
 * __[pymongo](http://api.mongodb.org/python/current/ "PyMongo"):__ Como conector con la base de datos [MongoDB](http://www.mongodb.org/).
 * __[WebPy](https://github.com/webpy/webpy "Framework WebPy"):__ Simple web Framework para Python.
-* __[Celery](https://github.com/webpy/webpy "Framework WebPy"):__ Sistema de procesado multiple y distribuido.
+* __[Celery](http://www.celeryproject.org "Celery"):__ Sistema de procesado multiple y distribuido.
+* __[Twython](https://github.com/ryanmcgrath/twython "Twitter Python Lib"):__ Para el sistema de Login y DM en Twitter.
 
 # WebUI Powered by:
 * [Bootstrap](http://getbootstrap.com/getting-started/)
@@ -79,13 +91,14 @@ permite usar como salida a intenet el proxy configurado en el equipo, util si se
 
 #Puesta a punto
 Antes de insertar reglas en el sistema es recomendame nutrilo con los datos como:
-"seccion","departamento","epigrafe","origen\_legislativo","materia","alerta"
-que nos permitiran generar alertas genericas sobre apartados contretos, cuanto mayor sea el numero de
-BOEs procesados mayor numero de opciones, si aparecen nuevas se van insertando con cada analisis.
+"seccion","departamento","epigrafe", ... que nos permitiran generar alertas genericas sobre apartados contretos,
+cuanto mayor sea el numero de BOEs procesados mayor numero de opciones, si aparecen nuevas se van insertando con cada analisis.
 <pre>
 $ python boe_parser.py 2013/01/01 --fin 2013/11/11
+$ celeryd
 $ python pagina.py
 </pre>
+Se recomienda insertar en el crontab `01 8 * * 0-6 python -B ~/BOE_Alert/scan.py`<br/>
 Si se tiene Celery esta activo, debes ejecutar `celery worker` o `celeryd`. Para que se procesen los distintos BOEs en paralelo.<br/>
 Y acceder a 127.0.0.1:8080 para ver el portal de administracion.<br/>
 Por ultimo es recomendable configurar un cron para que automatize todos los dias el analisis del BOE nuevo.
@@ -105,13 +118,20 @@ Procesa desde el 2013 hasta hoy
 Procesa todo el 2012
 `$ python boe_parser.py 2012/01/01 --fin 2013/01/01`
 
-Procesa todo el 2012 solo si hay reglas, util si solo se tiene reglas de un tipo NO recomendado
+Procesa todo el 2012 solo si hay reglas, util si solo se tiene reglas de un tipo, __NO recomendado__
 `$ python boe_parser.py 2012/01/01 --fin 2013/01/01 --rapido`
+
+Procesa todo el BOE con identificador BOE-S-2013-1
+`$ python boe_parser.py --boe BOE-S-2013-1`
 
 # TODO
 * Pagina Acerca
+* Insertar apartados para cumplir "Ley de Cookies"
+* Mejorar documentacion sobre configuracion de Reglas
 * Hacer uso de Celery para la busqueda de expresiones regulares
 * Mejorar el Sistema deteccion de reglas
 * Envio por eMail
-* Sistema login
-* Sistema multiusuario
+* Validacion del eMail
+* Sistema de registro por eMail
+* Envio de DM por Twitter
+* Mejorar cifrado de algunos datos

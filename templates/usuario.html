@@ -39,14 +39,17 @@ $else:
 </fieldset>
 
 <fieldset class="no_implementado panel panel-info"><div class="panel-heading"><legend class="panel-title">Datos para Twitter:</legend></div>
-<label>Enviar alerta por DM
-$if usuario['alert_twitter'] == True:
-	<input type="checkbox" value="true" checked="checked" name="alert_twitter" />
+$if usuario['twitter'] or usuario['twitter']=="":
+	<label>Enviar alerta por DM
+	$if usuario['alert_twitter'] == True:
+		<input type="checkbox" value="true" checked="checked" name="alert_twitter" />
+	$else:
+		<input type="checkbox" value="true" name="alert_twitter" />
+	</label>
+	<label for="twitter">Twitter</label>
+	<input id="twitter" type="text" value="$usuario['twitter']" placeholder="cuenta de Twitter" name="twitter" disabled="disabled" />
 $else:
-	<input type="checkbox" value="true" name="alert_twitter" />
-</label>
-<label for="twitter">Twitter</label>
-<input id="twitter" type="text" value="$usuario['twitter']" placeholder="cuenta de Twitter" name="twitter" />
+	<a href="$twitter_url()" class="btn btn-info"><img src="/static/images/sign-in-with-twitter-link.png" alt="Accede con twitter"/></a>
 </fieldset>
 
 <fieldset class="no_implementado panel panel-info">
@@ -64,6 +67,9 @@ $else:
 <input type="tel" value="$usuario['sms']" name="sms" placeholder="666666666" maxlength="12" />
 </fieldset>
 </div>
-<div class="panel-footer"><input type="submit" value="guardar" class="btn btn-primary"/></div>
+<div class="panel-footer">
+<input type="submit" value="guardar" class="btn btn-primary"/>
+<a href="/usuario?logout" class="btn btn-primary">Salir</a>
+</div>
 </div>
 </form>

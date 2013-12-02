@@ -29,6 +29,10 @@ def envia_alerta(alerta_id):
 	logging.info("Notificar a %s sobre '%s' en el BOE: %s"%(alerta['usuario'], alerta['alias'], alerta['boe']))
 
 @task
+def envia_email(correo, contenido):
+	logging.info("Notificar a %s con un e-Mail con el texto '%s'"%(correo, contenido))
+
+@task
 def procesa_boe(boe_id, rapido):
 	url = "http://boe.es/diario_boe/xml.php?id=%s"%boe_id
 	proxy = False

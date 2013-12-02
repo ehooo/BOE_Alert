@@ -7,7 +7,7 @@ try:
 except:
 	#Para Windows
 	from bson.objectid import ObjectId
-import os, ConfigParser, logging
+import os, ConfigParser, logging, hashlib, random
 import httplib, urllib2, urlparse
 
 FICHERO_CONFIGURACION = os.path.dirname(__file__) + "/../boe.conf"
@@ -25,10 +25,32 @@ def cargar_conf(fichero):
 	logging.getLogger().setLevel( NIVELES[ conf.get("log", "nivel") ] )
 	return conf
 
+def gen_clave(usuario):
+	clave = hashlib.md5(usuario['_id'])
+	if 'email' in usuario:
+		clave.update(usuario['email'])
+	if 'twitter' in usuario:
+		clave.update(usuario['twitter'])
+	return clave.hexdigest()
+
 def cifrar_id(id, usuario):
 	return str(id)
 def descifrar_id(cid, usuario):
 	return ObjectId(cid)
+def cifrar_clave(clave, email):
+	return hashlib.sha256(clave + hashlib.md5(email).hexdigest() ).hexdigest()
+def gen_random():
+	clave = ""
+	for i in range(random.randint(5, 10)):
+		g = random.choice('0123456789')
+		for i in random.choice('abcdefghijklmnopqrstuvwxyz'):
+			if (int(g)%2) == 0:
+				clave += i
+			else:
+				clave += i.upper()
+			if (int(g)%3) == 0:
+				clave += random.choice('0123456789')
+	return hashlib.sha256(clave).hexdigest()
 
 def get_mongo_uri(conf):
 	credencial = ""
@@ -73,6 +95,7 @@ def wget(host, path, cabezera={}, tipo="GET", post=None):
 	contenido = contenido.encode(def_encode)
 	return (contenido, cabezeras, estado)
 def proxy_wget(url, cabezera={}):
+	logging.debug("VIA Proxy: %s %s"%(url, cabezera))
 	req = urllib2.Request(url, headers=cabezera)
 	proxy_handler = urllib2.ProxyHandler()
 	opener = urllib2.build_opener(proxy_handler)

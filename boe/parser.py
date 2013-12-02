@@ -452,6 +452,8 @@ class BoeBParser(BoeTexto):
 		self.en_departamento = False
 		self.departamento = PalagraClave(DB)
 		self.malformado = False
+		self.materias_cpv_raw = ""
+		self.en_materias_cpv = False
 		self.re_cache['titulo'] = {}
 		self.re_cache['texto'] = {}
 		self.tipo = 'B'
@@ -462,6 +464,18 @@ class BoeBParser(BoeTexto):
 			self.alertTexto({'departamento':self.departamento.id,'malformado':False})
 			self.alertTT({'departamento':self.departamento.id,'malformado':False})
 		self.alertTT({'malformado':False})
+		if len(self.materias_cpv_raw) > 0:
+			for cpv in self.materias_cpv_raw.split('\n'):
+				pc = PalagraClave(DB)
+				pc['materias_cpv'] = cpv
+				self.alertTitulo({'malformado':False, 'materias_cpv':pc.id})
+				self.alertTexto({'malformado':False, 'materias_cpv':pc.id})
+				self.alertTT({'malformado':False, 'materias_cpv':pc.id})
+				if self.departamento.id:
+					self.alertTitulo({'materias_cpv':pc.id, 'departamento':self.departamento.id,'malformado':False})
+					self.alertTexto({'materias_cpv':pc.id, 'departamento':self.departamento.id,'malformado':False})
+					self.alertTT({'materias_cpv':pc.id, 'departamento':self.departamento.id,'malformado':False})
+
 		if self.malformado:
 			self.alertAll({'malformado':True})
 			if self.departamento.id:
@@ -473,6 +487,18 @@ class BoeBParser(BoeTexto):
 			self.alertTexto({'malformado':True})
 			self.alertTT({'malformado':True})
 
+			if len(self.materias_cpv_raw) > 0:
+				for cpv in self.materias_cpv_raw.split('\n'):
+					pc = PalagraClave(DB)
+					pc['materias_cpv'] = cpv
+					self.alertTitulo({'malformado':True, 'materias_cpv':pc.id})
+					self.alertTexto({'malformado':True, 'materias_cpv':pc.id})
+					self.alertTT({'malformado':True, 'materias_cpv':pc.id})
+					if self.departamento.id:
+						self.alertTitulo({'materias_cpv':pc.id, 'departamento':self.departamento.id,'malformado':True})
+						self.alertTexto({'materias_cpv':pc.id, 'departamento':self.departamento.id,'malformado':True})
+						self.alertTT({'materias_cpv':pc.id, 'departamento':self.departamento.id,'malformado':True})
+
 	def handle_starttag(self, tag, attrs):
 		if tag == 'fecha_publicacion':
 			self.en_fecha = True
@@ -482,6 +508,8 @@ class BoeBParser(BoeTexto):
 			self.en_departamento = True
 		elif tag == 'texto':
 			self.en_texto = True
+		elif tag == 'materias_cpv':
+			self.en_materias_cpv = True
 		elif (self.en_texto or self.en_titulo) and tag == 'img':
 			self.malformado = True
 	def handle_endtag(self, tag):
@@ -497,6 +525,8 @@ class BoeBParser(BoeTexto):
 		elif tag == 'texto':
 			self.en_texto = False
 			self.alertTexto({'malformado':False})
+		elif tag == 'materias_cpv':
+			self.en_materias_cpv = False
 		elif (self.en_texto or self.en_titulo) and tag == 'img':
 			self.malformado = True
 	def handle_data(self, data):
@@ -508,6 +538,8 @@ class BoeBParser(BoeTexto):
 			self.titulo += data.strip()
 		elif self.en_texto:
 			self.texto += data.strip()
+		elif self.en_materias_cpv:
+			self.materias_cpv_raw += data
 
 
 def boeToParser(id, rapido):

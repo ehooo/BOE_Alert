@@ -22,7 +22,9 @@ var ES_LANG = {
 }
 
 $(document).ready(function() {
-	check_alertas();
+	if(!window.location.search || window.location.search.indexOf('login')==-1){
+		check_alertas();
+	}
 	$(".no_implementado input").attr("disabled","disabled");
 	pagina_alertas();
 	pagina_reglas();
@@ -96,12 +98,12 @@ function pagina_alertas(){
 	};
 
 	function prepare_row(nRow, aData, iDisplayIndex, iDisplayIndexFull){
-		var boe = $('td:eq(0)', nRow);/*
+		var boe = $('td:eq(0)', nRow);
 		boe.append(
-			$('<a/>',{'class':'pdf', 'title':'pdf', 'href':'#', 'target':'_blank'}).append(
+			$('<a/>',{'class':'pdf', 'title':'pdf', 'href':'http://boe.es/boe/dias/'+aData[1]+'/pdfs/'+aData[0]+'.pdf', 'target':'_blank'}).append(
 				$('<img/>',{'src':'/static/images/pdf.png', 'alt':'pdf'})
 			)
-		);//*/
+		);
 		boe.append(
 			$('<a/>',{'class':'html', 'title':'html', 'href':'http://boe.es/diario_boe/txt.php?id='+aData[0] , 'target':'_blank'}).append(
 				$('<img/>',{'src':'/static/images/txt.png', 'alt':'html'})
@@ -132,6 +134,20 @@ function pagina_alertas(){
 };
 
 function pagina_reglas(){
+	var reglas_rapidas = $('#reglas_rapidas').dataTable( {
+		"oLanguage": ES_LANG,
+		"bProcessing": true,
+		"bServerSide": true,
+		"iDisplayLength": 10,
+		"aLengthMenu": [ 10, 15, 20 ],
+		"sDom":'l<"nueva_regla glyphicon glyphicon-plus"><"borrar_regla glyphicon glyphicon-trash">frtip',
+		"sServerMethod": "POST",
+        "sAjaxSource": "/reglas/rapidas",
+		//"sCookiePrefix": "session_cookie",
+		"oTableTools": { "sRowSelect": "single" },
+		"fnDrawCallback":check_buttons,
+		"fnRowCallback": prepare_row
+    } );
 	var boe_s = $('#boe_s').dataTable( {
 		"oLanguage": ES_LANG,
 		"bProcessing": true,
@@ -175,6 +191,25 @@ function pagina_reglas(){
 		"fnRowCallback": prepare_row
     } );
 
+	$('#guardar_reglas_rapidas').click(function(){
+		var post_data = $("#form_reglas_rapidas").serialize();
+		jQuery.ajax({
+			cache:false,
+			type: 'POST',
+			url: "/reglas/rapidas",
+			dataType: 'json',
+			data: post_data,
+			error:maneja_error,
+			success:function(data, textStatus, jqXHR ){
+				$('#from_reglas_rapidas [type="text"]').val('');
+				$("#modal_reglas_rapidas").modal('hide');
+				reglas_rapidas.fnDraw();
+				boe_s.fnDraw();
+				boe_a.fnDraw();
+				boe_b.fnDraw();
+			}
+		});
+	});
 	$('#guardar_boe_s').click(function(){
 		var post_data = $("#form_boe_s").serialize();
 		jQuery.ajax({
@@ -240,10 +275,29 @@ function pagina_reglas(){
 	$(".modal").on('show.bs.modal', function () { $(".nueva_regla").parent().removeClass('active'); });
 	$(".modal").on('shown.bs.modal', function () { $(".nueva_regla").parent().removeClass('active'); });
 
+	$('#reglas_rapidas_wrapper .nueva_regla').parent().click(function(){ $("#modal_reglas_rapidas").modal('show'); });
 	$('#boe_s_wrapper .nueva_regla').parent().click(function(){ $("#modal_boe_s").modal('show'); });
 	$('#boe_a_wrapper .nueva_regla').parent().click(function(){ $("#modal_boe_a").modal('show'); });
 	$('#boe_b_wrapper .nueva_regla').parent().click(function(){ $("#modal_boe_b").modal('show'); });
 
+	$('#reglas_rapidas_wrapper .borrar_regla').parent().click(function(){
+		var post_data = $(this.parentNode).find('tr.row_selected');
+		post_data = {'borrar':post_data.attr('id')};
+		jQuery.ajax({
+			cache:false,
+			type: 'POST',
+			url: "/reglas/rapidas",
+			dataType: 'json',
+			data: post_data,
+			error: maneja_error,
+			success:function(){
+				reglas_rapidas.fnDraw();
+				boe_s.fnDraw();
+				boe_a.fnDraw();
+				boe_b.fnDraw();
+			}
+		});
+	});
 	$('#boe_s_wrapper .borrar_regla').parent().click(function(){
 		var post_data = $(this.parentNode).find('tr.row_selected');
 		post_data = {'borrar':post_data.attr('id')};

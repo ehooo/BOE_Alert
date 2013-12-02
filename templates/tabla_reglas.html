@@ -1,5 +1,5 @@
 ﻿$def with (title, columnas, table_id)
-<div class="panel panel-primary">
+<div class="panel panel-info">
 <div class="panel-heading">$title</div>
 <div class="panel-body">
 <table cellpadding="0" cellspacing="0" border="0" class="display" id="$table_id">
@@ -36,16 +36,16 @@ $for key in columnas:
 	$if 'input' in key and 'type' in key:
 		$if key['type'] == "checkbox":
 			<div class="checkbox">
-			<label>$key['input'].replace('_',' ') <input name="$key['input']" type="$key['type']" value="true"/></label>
+			<label>$key['title'].replace('_',' ') <input name="$key['input']" type="$key['type']" value="true"/></label>
 			</div>
 		$else:
 			<div class="form-group">
-			<label for="$key['input']_$table_id">$key['input'].replace('re_','').replace('_',' '):</label>
+			<label for="$key['input']_$table_id">$key['title'].replace('_',' '):</label>
 			<input id="$key['input']_$table_id" name="$key['input']" type="$key['type']" placeholder="$key['input'].replace('re_','').replace('_',' ')" class="form-control" value="" />
 			</div>
 	$elif 'select' in key:
 		<div class="form-group">
-		<label for="$key['select']_$table_id">$key['select'].replace('_',' '):</label><select id="$key['select']_$table_id" name="$key['select']" class="form-control"></select>
+		<label for="$key['select']_$table_id">$key['title'].replace('_',' '):</label><select id="$key['select']_$table_id" name="$key['select']" class="form-control"></select>
 		</div>
 </form>
 </div>

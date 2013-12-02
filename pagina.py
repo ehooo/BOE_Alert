@@ -1,4 +1,9 @@
+'''
+-Si se cambia el mail validar el correo anterior y la clave
+-Si se cambia el mail validar que no existe para otro usuario
+-Borrar email no validado en una semana
 
+'''
 import sys, os, json
 abspath = os.path.dirname(__file__)
 sys.path.append(abspath)
@@ -6,42 +11,100 @@ if abspath!='':
 	os.chdir(abspath)
 
 from boe.db import DBConnector, Usuario, PalagraClave, Regla, Alertas
-from boe.utils import cargar_conf, cifrar_id, descifrar_id, FICHERO_CONFIGURACION
+from boe.utils import cargar_conf, FICHERO_CONFIGURACION, gen_random, cifrar_clave, cifrar_id, descifrar_id
 import logging
 
 CONF = cargar_conf(FICHERO_CONFIGURACION)
 DB = DBConnector(CONF)
 
 import web
+from twython import Twython
+
+def twitter_url():
+	if CONF.has_section("twitter"):
+		twitter = Twython(CONF.get("twitter", "consumer_key"), CONF.get("twitter", "consumer_secret"))
+
+		auth = twitter.get_authentication_tokens(callback_url=CONF.get("twitter", "callback"))
+		SESSION.twitter_token = auth['oauth_token']
+		SESSION.twitter_token_secret = auth['oauth_token_secret']
+		return auth['auth_url']
+	return ""
+def twitter_login(oauth_verifier):
+	if CONF.has_section("twitter") and 'twitter_token' in SESSION and 'twitter_token_secret' in SESSION:
+		twitter = Twython(CONF.get("twitter", "consumer_key"), CONF.get("twitter", "consumer_secret"), SESSION.twitter_token, SESSION.twitter_token_secret)
+		final_step = twitter.get_authorized_tokens(oauth_verifier)
+		if 'oauth_token_secret' in final_step and 'oauth_token' in final_step:
+			SESSION.twitter_token = final_step['oauth_token']
+			SESSION.twitter_token_secret = final_step['oauth_token_secret']
+
+			twitter = Twython(CONF.get("twitter", "consumer_key"), CONF.get("twitter", "consumer_secret"), SESSION.twitter_token, SESSION.twitter_token_secret)
+			response = twitter.verify_credentials()
+			if 'id' in response and 'screen_name' in response:
+				usuario = Usuario(DB)
+				res = usuario.list(0,{'$or':[{'twitter_id':response["id"]},{'twitter':response["screen_name"]}]},[],1)
+				if res['total'] > 0:
+					usuario = res['data'][0]
+				elif 'login' in SESSION and SESSION.loggin:
+					res = usuario.list(0,{'_id':SESSION.loggin},[],1)
+					if res['total'] > 0:
+						usuario = res['data'][0]
+					usuario['twitter'] = response["screen_name"]
+				else:
+					usuario['twitter'] = response["screen_name"]
+					usuario.save()
+				if not 'twitter_id' in usuario:
+					usuario['twitter_id'] = response["id"]
+				SESSION.login = usuario.id
+				raise web.seeother('/usuario')
+
 if CONF.has_option("web", "cookie_name"):
 	web.config.session_parameters['cookie_name'] = CONF.get("web", "cookie_name")
 if CONF.has_option("web", "cookie_domain"):
 	web.config.session_parameters['cookie_domain'] = CONF.get("web", "cookie_domain")
 if CONF.has_option("web", "cookie_salt"):
 	web.config.session_parameters['secret_key'] = CONF.get("web", "cookie_salt")
-web.config.debug = CONF.getboolean("web", "debug")
 web.config.session_parameters['timeout'] = 24 * 60 * 60 # 24 hours in seconds
 web.config.session_parameters['ignore_expiry'] = False
 web.config.session_parameters['ignore_change_ip'] = False
-web.config.session_parameters['expired_message'] = 'Session expired'
 web.config.session_parameters['httponly'] = False
+web.config.session_parameters['expired_message'] = 'Sesion expirada'
+
+web.config.debug = CONF.getboolean("web", "debug")
 
 URLS = (
 	'/(acerca)?', 'Estatico',
 	'/usuario', 'DatosUsuario',
 	'/reglas', 'AdminReglas',
 	'/alertas', 'AvisoAlertas',
+	'/reglas/rapidas', 'ReglasRapidas',#Interfaz Json
 	'/reglas/S', 'BOE_S',#Interfaz Json
 	'/reglas/A', 'BOE_A',#Interfaz Json
 	'/reglas/B', 'BOE_B',#Interfaz Json
 )
+
 APP = web.application(URLS, globals())
 
-GLOBALS = {}
+SESSION = web.session.Session(APP, web.session.DiskStore(CONF.get("web", "cookie_dir")), initializer={'login': None, 'cifrado':None})
+
+def genClave(forcegen=False):
+	clave = gen_random()
+	if forcegen or not 'cifrado' in SESSION or SESSION.cifrado is None:
+		SESSION.cifrado = clave
+	else:
+		clave = SESSION.cifrado
+		SESSION.cifrado = None
+	return clave
+
+GLOBALS = {'clave_cifrado':genClave, 'twitter_url':twitter_url}
 RENDER = web.template.render(CONF.get('web','tema'),globals=GLOBALS)
 RENDER_BASE = web.template.render(CONF.get('web','tema'), base='base',globals=GLOBALS)
 
 application = APP.wsgifunc()
+
+def get_usuario():
+	usuario = Usuario(DB)
+	usuario.id = SESSION.login
+	return usuario
 
 class DefaultWeb:
 	DEF__NUM_PAG = 10
@@ -52,11 +115,15 @@ class DefaultWeb:
 	'''
 	def __init__(self, auth=None, politica="default-src 'self'"):
 		self.politica = politica
+		self.usuario = None
+		self.auth = auth
 	'''
 		Aplicacion de policas de seguridad en las cabezeras.
 		Mas infromacion en https://www.owasp.org/index.php/List_of_useful_HTTP_headers
 	'''
 	def securizar_cabezera(self):
+		if self.auth:
+			self.check_auth()
 		'''
 		web.header('Strict-Transport-Security', 'max-age=60')
 		web.header('X-Content-Type-Options', 'nosniff')
@@ -68,6 +135,51 @@ class DefaultWeb:
 			web.header('X-Content-Security-Policy', self.politica)
 			web.header('Content-Security-Policy', self.politica)
 		#'''
+	def check_auth(self):
+		if not CONF.getboolean('web','multilogin'):
+			res = Usuario(DB).list(0,{},[],1)
+			if res['total'] > 0:
+				self.usuario = res['data'][0]
+				SESSION.login = self.usuario.id
+			else:
+				usuario['alert_web']=True
+				usuario.save()
+
+		if not 'login' in SESSION or SESSION.login is None:
+			raise web.seeother('/usuario?login')
+		res = Usuario(DB).list(0,{'_id':SESSION.login},[],1)
+		if res['total'] > 0:
+			self.usuario = res['data'][0]
+		else:
+			SESSION.login = None
+			'''
+				usuario['alert_web']=True
+				usuario['alert_email']=False
+				usuario['email']=""
+				usuario['alert_twitter']=False
+				usuario['twitter']=""
+				usuario['alert_sms']=False
+				usuario['sms']=""
+				usuario.save()
+			#'''
+	def do_auth(self):
+		i = web.input()
+		email = i.get('email')
+		clave = cifrar_clave(i.get('clave'), email)
+		SESSION.login = None
+		usuario = Usuario(DB)
+		res = usuario.list(0,{'email':email},[],1)
+		if res['total'] > 0:
+			usuario = res['data'][0]
+			if usuario['clave'] == clave:
+				SESSION.login = usuario.id
+		elif False:#TODO Auto registro y Mecanismo de validacion del email
+			usuario['email'] = email
+			usuario['clave'] = clave
+			usuario['valid_mail'] = False
+			usuario.save()
+			SESSION.login = usuario.id
+		return usuario.id is not None
 
 	def HEAD(self, *extras):
 		raise web.Forbidden()
@@ -93,35 +205,34 @@ class Estatico(DefaultWeb):
 		return RENDER_BASE.acerca()
 
 class DatosUsuario(DefaultWeb):
-	@staticmethod
-	def get_usuario():
-		usuario = Usuario(DB)
-		res = usuario.list()
-		if res['total'] > 0:
-			return res['data'][0]
-		else:
-			usuario['alert_web']=True
-			usuario['alert_email']=False
-			usuario['email']=""
-			usuario['alert_twitter']=False
-			usuario['twitter']=""
-			usuario['alert_sms']=False
-			usuario['sms']=""
-			usuario.save()
-		return usuario
 	def GET(self, errores=None):
 		DefaultWeb.GET(self)
 		web.header('Content-Type', 'text/html')
-		usuario = DatosUsuario.get_usuario()
-		return RENDER_BASE.usuario(usuario, errores)
+		i = web.input()
+		if i.has_key('logout'):
+			SESSION.login = None
+			SESSION.kill()
+		elif i.has_key('login'):
+			return RENDER_BASE.login(None)
+		elif i.has_key('oauth_verifier'):
+			twitter_login(i.get('oauth_verifier'))
+		self.check_auth()
+		return RENDER_BASE.usuario(self.usuario, errores)
 	def POST(self):
 		DefaultWeb.POST(self)
 		i = web.input()
-		usuario = DatosUsuario.get_usuario()
+		if i.has_key('login'):
+			cifrado = genClave()
+			if i.get('cifrado') != cifrado:
+				return RENDER_BASE.login('Validacion fallida')
+			if not self.do_auth():
+				return RENDER_BASE.login('Usuario o Clave erroneos')
+
+		self.check_auth()
 		if i.get('alert_web'):
-			usuario['alert_web']=True
+			self.usuario['alert_web']=True
 		else:
-			usuario['alert_web']=False
+			self.usuario['alert_web']=False
 		'''
 			#TODO validar los datos
 			if i.get('alert_email'):
@@ -146,19 +257,22 @@ class DatosUsuario(DefaultWeb):
 		return self.GET([])
 
 class AdminReglas(DefaultWeb):
+	def __init__(self):
+		DefaultWeb.__init__(self, True)
 	def GET(self):
 		DefaultWeb.GET(self)
 		web.header('Content-Type', 'text/html')
+		rapidas = ReglasRapidas()
 		boes = BOE_S()
 		boea = BOE_A()
 		boeb = BOE_B()
-		return RENDER_BASE.reglas(None, boes.GET(), boea.GET(), boeb.GET())
+		return RENDER_BASE.reglas(None, rapidas.GET(), boes.GET(), boea.GET(), boeb.GET())
 	def POST(self):
 		DefaultWeb.GET(self)
 		i = web.input()
 		if i.has_key('listado'):
 			lista = i.get('listado')
-			if lista not in ["seccion","departamento","epigrafe","origen_legislativo","materia","alerta"]:
+			if lista not in ["seccion","departamento","epigrafe","origen_legislativo","materia","alerta","materias_cpv"]:
 				web.header('Content-Type', 'application/json')
 				raise web.NotFound(json.dumps({"error":"listado %s no valido"%i.get('listado')}))
 			pc = PalagraClave(DB)
@@ -188,6 +302,7 @@ class TablaBase(DefaultWeb):
 		#{ 'title':'Columna simple',	'width':'10%' }
 	]
 	def __init__(self):
+		DefaultWeb.__init__(self, True)
 		self.json_encoder = ComplexEncoder
 	def toDataTables(self, lista, total_filtrado=None):
 		if total_filtrado is None:
@@ -258,16 +373,15 @@ class AvisoAlertas(TablaBase):
 		i = web.input()
 		borrar = i.get('borrar')
 		db_obj = Alertas(DB)
-		usuario = DatosUsuario.get_usuario()
 		web.header('Content-Type', 'application/json')
 
 		if i.get('total'):
-			elements = db_obj.list(0, {'usuario':usuario.id}, [], 1)
+			elements = db_obj.list(0, {'usuario':self.usuario.id}, [], 1)
 			return json.dumps({'total':elements['total']})
 
 		borrar = i.get('borrar')
 		if borrar is not None:
-			elements = db_obj.list(0, {'boe':borrar,'usuario':usuario.id}, [], 1)
+			elements = db_obj.list(0, {'boe':borrar,'usuario':self.usuario.id}, [], 1)
 			if len(elements['data'])>0:
 				elements['data'][0].remove()
 				return json.dumps({"ok":"Aviso borrado"})
@@ -280,7 +394,7 @@ class AvisoAlertas(TablaBase):
 			if termino != '':
 				regx = re.compile('.*%s.*'%termino ,re.IGNORECASE)
 				busquedas['$or'] = [{'boe':regx},{'alias':regx}]
-		busquedas['usuario'] = usuario.id
+		busquedas['usuario'] = self.usuario.id
 		elements = db_obj.list(pag, busquedas, sort, tamXpag)
 		return json.dumps(self.toDataTables(elements), cls=self.json_encoder)
 
@@ -309,7 +423,7 @@ class TablaReglasBase(TablaBase):
 					candidata = i.get(clave)
 					if candidata is None or len(candidata.strip())==0:
 						post_valido = True
-					elif clave in ["seccion","departamento","epigrafe","origen_legislativo","materia","alerta"]:
+					elif clave in ["seccion","departamento","epigrafe","origen_legislativo","materia","alerta","materias_cpv"]:
 						pc = PalagraClave(DB)
 						elements = pc.list(0, {clave:candidata}, [], 1)
 						if elements['total'] > 0 and len(elements['data'])>0:
@@ -332,13 +446,12 @@ class TablaReglasBase(TablaBase):
 		return RENDER.tabla_reglas(titulo, self.__class__.COLUMNAS, tabla_id)
 	def POST(self):
 		TablaBase.POST(self)
-		usuario = DatosUsuario.get_usuario()
 		db_obj = Regla(DB)
 		borrar = web.input().get('borrar')
 		web.header('Content-Type', 'application/json')
 		if borrar is not None:
-			bid = descifrar_id(borrar, usuario)
-			elements = db_obj.list(0, {'_id':bid,'usuario':usuario.id}, [], 1)
+			bid = descifrar_id(borrar, self.usuario)
+			elements = db_obj.list(0, {'_id':bid,'usuario':self.usuario.id}, [], 1)
 			if len(elements['data'])>0:
 				if elements['data'][0].id == bid:
 					elements['data'][0].remove()
@@ -347,10 +460,75 @@ class TablaReglasBase(TablaBase):
 
 		(pag, busquedas, sort, tamXpag) = self.get_list_params()
 		busquedas['tipo'] = self.tipo
-		busquedas['usuario'] = usuario.id
+		busquedas['usuario'] = self.usuario.id
 		elements = db_obj.list(pag, busquedas, sort, tamXpag)
 
 		return json.dumps(self.toDataTables(elements), cls=self.json_encoder)
+
+class RapidasEncoder(ComplexEncoder):
+	def default(self, obj):
+		if isinstance(obj, Regla):
+			ret = []
+			for fila in ReglasRapidas.COLUMNAS:
+				ret.append(obj[ fila['input'] ])
+			ret.append(cifrar_id(obj.id, get_usuario()))
+			return ret
+		return ComplexEncoder.default(self, obj)
+class ReglasRapidas(TablaReglasBase):
+	COLUMNAS = [
+		{ 'title':'alias',	'width':'10%',	'input':'alias', 'type':'text'},
+		{ 'title':'expresion regular', 'width':'10%', 'input':'re_expre', 'type':'text'}
+	]
+	def __init__(self):
+		TablaReglasBase.__init__(self, 'rapida')
+		self.json_encoder = RapidasEncoder
+	def GET(self):
+		return TablaReglasBase.GET(self, "Reglas rapidas","reglas_rapidas")
+	def POST(self):
+		self.securizar_cabezera()
+		alias = web.input().get('alias')
+		if alias is not None:
+			query = self.valida_datos()
+			error = False
+			if len(alias.strip())==0:
+				error = json.dumps({"error":"Debe insertar un alias"})
+			elif query:
+				db_obj = Regla(DB)
+				ret = db_obj.add_rule_S(self.usuario, alias, None, None, None, query['re_expre'])
+				ret = db_obj.add_rule_A(self.usuario, alias, False, query['re_expre'], None, None, None, None, None)
+				ret = db_obj.add_rule_A(self.usuario, alias, False, None, None, None, None, None, query['re_expre'])
+				ret = db_obj.add_rule_B(self.usuario, alias, False, query['re_expre'], None, None, None)
+				ret = db_obj.add_rule_B(self.usuario, alias, False, None, None, None, query['re_expre'])
+
+				db_obj = Regla(DB)
+				db_obj['usuario'] = self.usuario.id
+				db_obj['alias'] = alias
+				db_obj['tipo'] = 'rapida'
+				db_obj['re_expre'] = query['re_expre']
+				db_obj.save()
+				return json.dumps({"ok":"Regla insertada"})
+			else:
+				error = json.dumps({"error":"Debe insertar mas datos ademas del alias"})
+			if error:
+				web.header('Content-Type', 'application/json')
+				raise web.NotFound(error)
+				return error
+		borrar = web.input().get('borrar')
+		if borrar is not None:
+			bid = descifrar_id(borrar, self.usuario)
+			db_obj = Regla(DB)
+			elements = db_obj.list(0, {'_id':bid,'usuario':self.usuario.id}, [], 1)
+			if len(elements['data'])>0:
+				if elements['data'][0].id == bid:
+					alias = elements['data'][0]['alias']
+					re_expre = elements['data'][0]['re_expre']
+					rem_elem = db_obj.list(0, {'usuario':self.usuario.id,'alias':alias,'$or':[{'re_texto':re_expre},{'re_titulo':re_expre}]}, [], 10)
+					for elem in rem_elem['data']:
+						elem.remove()
+			else:
+				web.header('Content-Type', 'application/json')
+				raise web.NotFound(json.dumps({"error":"Regla no encontrada"}))
+		return TablaReglasBase.POST(self)
 
 class SEncoder(ComplexEncoder):
 	def default(self, obj):
@@ -369,7 +547,7 @@ class SEncoder(ComplexEncoder):
 						ret.append(str(pc))
 					else:
 						ret.append(obj[clave])
-			ret.append(cifrar_id(obj.id, DatosUsuario.get_usuario()))
+			ret.append(cifrar_id(obj.id, get_usuario()))
 			return ret
 		return ComplexEncoder.default(self, obj)
 class BOE_S(TablaReglasBase):
@@ -388,19 +566,18 @@ class BOE_S(TablaReglasBase):
 	def POST(self):
 		alias = web.input().get('alias')
 		if alias is not None:
+			self.securizar_cabezera()
 			query = self.valida_datos()
 			error = False
 			if len(alias.strip())==0:
 				error = json.dumps({"error":"Debe insertar un alias"})
 			elif query:
 				db_obj = Regla(DB)
-				ret = db_obj.add_rule_S(DatosUsuario.get_usuario(), alias, query['seccion'], query['departamento'], query['epigrafe'], query['re_titulo'])
-				self.securizar_cabezera()
+				ret = db_obj.add_rule_S(self.usuario, alias, query['seccion'], query['departamento'], query['epigrafe'], query['re_titulo'])
 				return json.dumps({"ok":"Regla insertada"})
 			else:
 				error = json.dumps({"error":"Debe insertar mas datos ademas del alias"})
 			if error:
-				self.securizar_cabezera()
 				web.header('Content-Type', 'application/json')
 				raise web.NotFound(error)
 				return error
@@ -423,7 +600,7 @@ class AEncoder(ComplexEncoder):
 						ret.append(str(pc))
 					else:
 						ret.append(obj[clave])
-			ret.append(cifrar_id(obj.id, DatosUsuario.get_usuario()))
+			ret.append(cifrar_id(obj.id, get_usuario()))
 			return ret
 		return ComplexEncoder.default(self, obj)
 class BOE_A(TablaReglasBase):
@@ -445,20 +622,19 @@ class BOE_A(TablaReglasBase):
 	def POST(self):
 		alias = web.input().get('alias')
 		if alias is not None:
+			self.securizar_cabezera()
 			query = self.valida_datos()
 			error = False
 			if len(alias.strip())==0:
 				error = json.dumps({"error":"Debe insertar un alias"})
 			elif query:
 				db_obj = Regla(DB)
-				ret = db_obj.add_rule_A(DatosUsuario.get_usuario(), alias, query['malformado'], query['re_titulo'], query['departamento'], query['origen_legislativo'], query['materia'], query['alerta'], query['re_texto'])
-				self.securizar_cabezera()
+				ret = db_obj.add_rule_A(self.usuario, alias, query['malformado'], query['re_titulo'], query['departamento'], query['origen_legislativo'], query['materia'], query['alerta'], query['re_texto'])
 				return json.dumps({"ok":"Regla insertada"})
 			else:
 				error = json.dumps({"error":"Debe insertar mas datos ademas del alias"})
 			if error:
 				web.header('Content-Type', 'application/json')
-				self.securizar_cabezera()
 				raise web.NotFound(error)
 				return error
 		return TablaReglasBase.POST(self)
@@ -474,13 +650,13 @@ class BEncoder(ComplexEncoder):
 				elif 'select' in fila:
 					clave = fila['select']
 				if clave:
-					if clave in ["seccion","departamento","epigrafe","origen_legislativo","materia","alerta"]:
+					if clave in ["departamento","materias_cpv"]:
 						pc = PalagraClave(DB)
 						pc.id = obj[clave]
 						ret.append(str(pc))
 					else:
 						ret.append(obj[clave])
-			ret.append(cifrar_id(obj.id, DatosUsuario.get_usuario()))
+			ret.append(cifrar_id(obj.id, get_usuario()))
 			return ret
 		return ComplexEncoder.default(self, obj)
 class BOE_B(TablaReglasBase):
@@ -489,6 +665,7 @@ class BOE_B(TablaReglasBase):
 		{ 'title':'malformado',	'width':'10%',	'input':'malformado', 'type':'checkbox'},
 		{ 'title':'titulo',	'width':'10%',	'input':'re_titulo', 'type':'text'},
 		{ 'title':'departamento',	'width':'10%',	'select':'departamento'},
+		{ 'title':'materias',	'width':'10%',	'select':'materias_cpv'},
 		{ 'title':'texto',	'width':'10%',	'input':'re_texto', 'type':'text'}
 	]
 	def __init__(self):
@@ -499,22 +676,19 @@ class BOE_B(TablaReglasBase):
 	def POST(self):
 		alias = web.input().get('alias')
 		if alias is not None:
+			self.securizar_cabezera()
 			query = self.valida_datos()
 			error = False
 			if len(alias.strip())==0:
 				error = json.dumps({"error":"Debe insertar un alias"})
 			elif query:
 				db_obj = Regla(DB)
-				ret = db_obj.add_rule_B(DatosUsuario.get_usuario(), alias, query['malformado'], query['re_titulo'], query['departamento'], query['re_texto'])
-
-				self.securizar_cabezera()
+				ret = db_obj.add_rule_B(self.usuario, alias, query['malformado'], query['re_titulo'], query['departamento'], query['materias_cpv'], query['re_texto'])
 				return json.dumps({"ok":"Regla insertada"})
 			else:
 				error = json.dumps({"error":"Debe insertar mas datos ademas del alias"})
 			if error:
 				web.header('Content-Type', 'application/json')
-
-				self.securizar_cabezera()
 				raise web.NotFound(error)
 				return error
 		return TablaReglasBase.POST(self)
