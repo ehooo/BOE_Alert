@@ -99,7 +99,7 @@ function pagina_alertas(){
 
 	function prepare_row(nRow, aData, iDisplayIndex, iDisplayIndexFull){
 		var boe = $('td:eq(0)', nRow);
-		if (aData[0]){
+		if (aData[1]){
 			boe.append(
 				$('<a/>',{'class':'pdf', 'title':'pdf', 'href':'http://boe.es/boe/dias/'+aData[1]+'/pdfs/'+aData[0]+'.pdf', 'target':'_blank'}).append(
 					$('<img/>',{'src':'/static/images/pdf.png', 'alt':'pdf'})
