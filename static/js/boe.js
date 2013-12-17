@@ -99,11 +99,13 @@ function pagina_alertas(){
 
 	function prepare_row(nRow, aData, iDisplayIndex, iDisplayIndexFull){
 		var boe = $('td:eq(0)', nRow);
-		boe.append(
-			$('<a/>',{'class':'pdf', 'title':'pdf', 'href':'http://boe.es/boe/dias/'+aData[1]+'/pdfs/'+aData[0]+'.pdf', 'target':'_blank'}).append(
-				$('<img/>',{'src':'/static/images/pdf.png', 'alt':'pdf'})
-			)
-		);
+		if (aData[0]){
+			boe.append(
+				$('<a/>',{'class':'pdf', 'title':'pdf', 'href':'http://boe.es/boe/dias/'+aData[1]+'/pdfs/'+aData[0]+'.pdf', 'target':'_blank'}).append(
+					$('<img/>',{'src':'/static/images/pdf.png', 'alt':'pdf'})
+				)
+			);
+		}
 		boe.append(
 			$('<a/>',{'class':'html', 'title':'html', 'href':'http://boe.es/diario_boe/txt.php?id='+aData[0] , 'target':'_blank'}).append(
 				$('<img/>',{'src':'/static/images/txt.png', 'alt':'html'})

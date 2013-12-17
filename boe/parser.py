@@ -274,7 +274,7 @@ class BoeAParser(BoeTexto):
 		self.tipo = 'A'
 		self.claves = ["departamento","origen_legislativo","materia","alerta","re_texto","seccion","re_titulo"]
 	def feed(self, contenido):
-		BasicParser.feed(self, contenido)
+		BoeTexto.feed(self, contenido)
 		if self.departamento.id:
 			self.alertTitulo({'departamento':self.departamento.id,'malformado':False})
 			self.alertTexto({'departamento':self.departamento.id,'malformado':False})
