@@ -59,12 +59,16 @@ class BasicParser():
 		self.tipo = None
 		self.claves = ["re_titulo","departamento"]
 		self.to_alert = []
+		self.in_regla = []
+
 	def feed(self, contenido):
 		self.p.Parse(contenido)
 	def alert(self, regla):
 		alerta = Alertas(DB).add(regla, self.boe, self.fecha)
-		if not 'enviado' in alerta or alerta['enviado']:
+		if not alerta.id in self.to_alert:
 			self.to_alert.append(alerta.id)
+		if not regla.id in self.in_regla:
+			self.in_regla.append(regla.id)
 
 	def alertAll(self, query):
 		if self.tipo:
@@ -72,6 +76,7 @@ class BasicParser():
 		for clave in self.claves:
 			if not clave in query:
 				query[clave] = {'$exists':False}
+		query["id"] = {"$nin":self.in_regla}
 
 		reglas = Regla(DB)
 		encontradas = {'total':1}
@@ -90,6 +95,7 @@ class BasicParser():
 		for clave in self.claves:
 			if not clave in query:
 				query[clave] = {'$exists':False}
+		query["id"] = {"$nin":self.in_regla}
 
 		reglas = Regla(DB)
 		encontradas = {'total':1}
@@ -276,11 +282,13 @@ class BoeAParser(BoeTexto):
 	def feed(self, contenido):
 		BoeTexto.feed(self, contenido)
 		if self.departamento.id:
+			self.alertAll({'departamento':self.departamento.id,'malformado':False})
 			self.alertTitulo({'departamento':self.departamento.id,'malformado':False})
 			self.alertTexto({'departamento':self.departamento.id,'malformado':False})
 			self.alertTT({'departamento':self.departamento.id,'malformado':False})
 
 		if self.origen_legislativo.id:
+			self.alertAll({'origen_legislativo':self.origen_legislativo.id,'malformado':False})
 			self.alertTitulo({'origen_legislativo':self.origen_legislativo.id,'malformado':False})
 			self.alertTexto({'departamento':{'$exists':False},'origen_legislativo':self.origen_legislativo.id,'materia':{'$exists':False},'alerta':{'$exists':False},'re_titulo':{'$exists':False},'malformado':False})
 			self.alertTT({'departamento':{'$exists':False},'origen_legislativo':self.origen_legislativo.id,'materia':{'$exists':False},'alerta':{'$exists':False},'malformado':False})
@@ -288,6 +296,9 @@ class BoeAParser(BoeTexto):
 				self.alertTitulo({'departamento':self.departamento.id,'origen_legislativo':self.origen_legislativo.id,'materia':{'$exists':False},'alerta':{'$exists':False},'re_texto':{'$exists':False},'malformado':False})
 				self.alertTexto({'departamento':self.departamento.id,'origen_legislativo':self.origen_legislativo.id,'materia':{'$exists':False},'alerta':{'$exists':False},'re_titulo':{'$exists':False},'malformado':False})
 				self.alertTT({'departamento':self.departamento.id,'origen_legislativo':self.origen_legislativo.id,'materia':{'$exists':False},'alerta':{'$exists':False},'malformado':False})
+
+		self.alertTexto({'malformado':False})
+		self.alertTitulo({'malformado':False})
 
 		if len(self.materias)>0:
 			self.alertAll({'materia':{'$in':self.materias},'malformado':False})
@@ -402,22 +413,16 @@ class BoeAParser(BoeTexto):
 			self.en_fecha = False
 		elif tag == 'departamento':
 			self.en_departamento = False
-			if self.departamento.id:
-				self.alertAll({'departamento':self.departamento.id,'malformado':False})
 		elif tag == 'origen_legislativo':
 			self.en_origen_legislativo = False
-			if self.origen_legislativo.id:
-				self.alertAll({'origen_legislativo':self.origen_legislativo.id,'malformado':False})
 		elif tag == 'materia':
 			self.en_materia = False
 		elif tag == 'alerta':
 			self.en_alerta = False
 		elif tag == 'texto':
 			self.en_texto = False
-			self.alertTexto({'malformado':False})
 		elif tag == 'titulo':
 			self.en_titulo = False
-			self.alertTitulo({'malformado':False})
 		elif (self.en_texto or self.en_titulo) and tag == 'img':
 			self.malformado = True
 	def handle_data(self, data):
@@ -460,9 +465,12 @@ class BoeBParser(BoeTexto):
 	def feed(self, contenido):
 		BoeTexto.feed(self, contenido)
 		if self.departamento.id:
+			self.alertAll({'departamento':self.departamento.id,'malformado':False})
 			self.alertTitulo({'departamento':self.departamento.id,'malformado':False})
 			self.alertTexto({'departamento':self.departamento.id,'malformado':False})
 			self.alertTT({'departamento':self.departamento.id,'malformado':False})
+		self.alertTitulo({'malformado':False})
+		self.alertTexto({'malformado':False})
 		self.alertTT({'malformado':False})
 		if len(self.materias_cpv_raw) > 0:
 			for cpv in self.materias_cpv_raw.split('\n'):
@@ -517,14 +525,10 @@ class BoeBParser(BoeTexto):
 			self.en_fecha = False
 		elif tag == 'titulo':
 			self.en_titulo = False
-			self.alertTitulo({'malformado':False})
 		elif tag == 'departamento':
 			self.en_departamento = False
-			if self.departamento.id:
-				self.alertAll({'departamento':self.departamento.id,'malformado':False})
 		elif tag == 'texto':
 			self.en_texto = False
-			self.alertTexto({'malformado':False})
 		elif tag == 'materias_cpv':
 			self.en_materias_cpv = False
 		elif (self.en_texto or self.en_titulo) and tag == 'img':

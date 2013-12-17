@@ -267,6 +267,25 @@ function pagina_reglas(){
 		});
 	});
 
+	$('#alias_reglas_rapidas').keypress(function(eventObject){
+		var a = $('#re_expre_reglas_rapidas');
+		var t = a.val();
+		if(eventObject.charCode == 0){
+			if(eventObject.keyCode == 8)
+				t = t.substr(0,t.length-1);
+		}else
+			t = t.concat( String.fromCharCode(eventObject.charCode) );
+		a.val( t );
+	});
+	
+	$('label[for="re_expre_reglas_rapidas"]').append(
+		$('<a/>',{
+			'class':"glyphicon glyphicon-question-sign",
+			'href':'http://docs.python.org/2/howto/regex.html#regex-howto',
+			'target':'_blank',
+			'title':'Ayuda sobre Expresiones Regulares en python'
+		})
+	);
 	var boton = $('<button/>',{
 		'type':'button',
 		'class':'btn btn-primary btn-xs',
