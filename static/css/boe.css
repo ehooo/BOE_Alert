@@ -18,5 +18,8 @@
 	right: 10px;
 	top: -60px;
 }
+fieldset label{ display: block; padding-left: 5px; }
+fieldset label[for]{ display: inline-block; }
+fieldset .row{ margin: auto; }
 
 label, th, .btn, .pull-right { text-transform: capitalize; }

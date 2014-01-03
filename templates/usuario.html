@@ -34,10 +34,17 @@ $if usuario['alert_email'] == True:
 $else:
 	<input type="checkbox" value="true" name="alert_email" />
 </label>
+
+<div class="row">
 <label for="email" >eMail</label>
 <input id="email" type="email" value="$usuario['email']" placeholder="ejemplo@boe.es" name="email" />
 $if usuario['email'] and not usuario['email_valido']:
 	<input type="submit" value="reenviar validaci&oacute;n" class="btn btn-primary" name="revalidar"/>
+</div>
+<div class="row">
+<label for="clave_email" >contrase&ntilde;a</label>
+<input id="clave_email" type="password" value="" placeholder="contrase&ntilde;a" name="clave_email" />
+</div>
 </fieldset>
 
 <fieldset class="panel panel-info"><div class="panel-heading"><legend class="panel-title">Datos para Twitter:</legend></div>
@@ -48,8 +55,10 @@ $if usuario['twitter'] and usuario['twitter']!="":
 	$else:
 		<input type="checkbox" value="true" name="alert_twitter" />
 	</label>
+	<div class="row">
 	<label for="twitter">Twitter</label>
 	<input id="twitter" type="text" value="$usuario['twitter']" placeholder="cuenta de Twitter" name="twitter" disabled="disabled" />
+	</div>
 $else:
 	<a href="$twitter_url()" class="btn btn-info"><img src="/static/images/sign-in-with-twitter-link.png" alt="Accede con twitter"/></a>
 </fieldset>
@@ -69,6 +78,23 @@ $else:
 <input type="tel" value="$usuario['sms']" name="sms" placeholder="666666666" maxlength="12" />
 </fieldset>
 -->
+
+$if usuario['clave']:
+	<fieldset class="panel panel-info"><div class="panel-heading"><legend class="panel-title">Cambio de contrase&ntilde;a:</legend></div>
+	<div class="row">
+	<label for="clave_act" >Contrase&ntilde;a actual</label>
+	<input id="clave_act" type="password" value="" placeholder="contrase&ntilde;a actual" name="clave_act" />
+	</div>
+	<div class="row">
+	<label for="clave_n" >Nueva contrase&ntilde;a</label>
+	<input id="clave_n" type="password" value="" placeholder="nueva contrase&ntilde;a" name="clave_n" />
+	</div>
+	<div class="row">
+	<label for="clave_n2" >Repita nueva contrase&ntilde;a</label>
+	<input id="clave_n2" type="password" value="" placeholder="repita contrase&ntilde;a" name="clave_n2" />
+	</div>
+	</fieldset>
+
 </div>
 <div class="panel-footer">
 <input type="submit" value="guardar" class="btn btn-primary"/>

@@ -62,9 +62,10 @@ Para configurar web.py con servidor web consultar la [documentacion de web.py](h
  * formato_log = Usado en la clave CELERYD\_LOG_FORMAT en el [formato de logging python](http://docs.python.org/2/library/logging.html#logrecord-attributes) cambiando los % por $
  * formato_log_tareas = Usado en la clave CELERYD\_TASK\_LOG\_FORMAT en el [formato de logging python](http://docs.python.org/2/library/logging.html#logrecord-attributes) cambiando los % por $
 * [web]
- * debug = Un valor Verdadero o Falso para [ConfigParser](http://docs.python.org/2/library/#ConfigParser.RawConfigParser.getboolean)
+ * debug = Un valor Verdadero o Falso para [ConfigParser](http://docs.python.org/2/library/#ConfigParser.RawConfigParser.getboolean) Con este valor a Verdadero la session tiene problemas
+ * autoregistro = Un valor Verdadero o Falso para [ConfigParser](http://docs.python.org/2/library/#ConfigParser.RawConfigParser.getboolean) permite hacer registros automaticos al insertar un correo nuevo.
  * tema = Path donde se encuentra las plantillas de la web
- * multilogin = Permite hacer login con distintos usuarios. Un valor Verdadero o Falso para [ConfigParser](http://docs.python.org/2/library/#ConfigParser.RawConfigParser.getboolean)
+ * multilogin = Permite hacer login con distintos usuarios, puede dar problemas con "debug" verdadero. Un valor Verdadero o Falso para [ConfigParser](http://docs.python.org/2/library/#ConfigParser.RawConfigParser.getboolean)
  * cookie_name = Nombre de la Cookie
  * cookie_domain = Dominio de la Cookie
  * cookie_salt = Salt para la Cookie __Es recomendable modificarla__

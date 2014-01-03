@@ -137,6 +137,7 @@ class DefaultWeb:
 		email = i.get('email')
 		if not valid_email(email):
 			return False
+		#TODO potenciales problemas al cambiar el email
 		clave = cifrar_clave(i.get('clave'), email)
 		SESSION.login = None
 		usuario = Usuario(DB)
@@ -145,14 +146,16 @@ class DefaultWeb:
 			usuario = res['data'][0]
 			if usuario['clave'] == clave:
 				SESSION.login = usuario.id
-		elif False:#TODO Auto registro
+				return True
+		elif CONF.getboolean("web", 'autoregistro'):
 			usuario['email'] = email
 			usuario['clave'] = clave
 			usuario['email_valido'] = False
 			usuario['cifrado'] = gen_random()
 			usuario.save()
 			SESSION.login = usuario.id
-		return usuario.id is not None
+			return True
+		return False
 
 	def HEAD(self, *extras):
 		raise web.Forbidden()
@@ -178,11 +181,40 @@ class Estatico(DefaultWeb):
 		return RENDER_BASE.acerca( open('README.md','r').read() )
 
 class DatosUsuario(DefaultWeb):
+	def do_twitter_auth(self, oauth_verifier):
+		if CONF.has_section("twitter") and 'twitter_token' in SESSION and 'twitter_token_secret' in SESSION:
+			twitter = Twython(CONF.get("twitter", "consumer_key"), CONF.get("twitter", "consumer_secret"), SESSION.twitter_token, SESSION.twitter_token_secret)
+			final_step = twitter.get_authorized_tokens(oauth_verifier)
+			if 'oauth_token_secret' in final_step and 'oauth_token' in final_step:
+				SESSION.twitter_token = final_step['oauth_token']
+				SESSION.twitter_token_secret = final_step['oauth_token_secret']
+
+				twitter = Twython(CONF.get("twitter", "consumer_key"), CONF.get("twitter", "consumer_secret"), SESSION.twitter_token, SESSION.twitter_token_secret)
+				response = twitter.verify_credentials()
+				if 'id' in response and 'screen_name' in response:
+					usuario = Usuario(DB)
+					res = usuario.list(0,{'twitter_id':response["id"]},[],1)
+					if res['total'] > 0:
+						usuario = res['data'][0]
+					elif 'login' in SESSION and SESSION.login:
+						res = usuario.list(0,{'_id':SESSION.login},[],1)
+						if res['total'] > 0:
+							usuario = res['data'][0]
+							usuario['twitter'] = response["screen_name"]
+							usuario['twitter_id'] = response["id"]
+					else:
+						usuario['twitter'] = response["screen_name"]
+						usuario['twitter_id'] = response["id"]
+						usuario['cifrado'] = gen_random()
+						usuario.save()
+
+					SESSION.login = usuario.id
+					raise web.seeother('/usuario')
 	def GET(self, errores=None):
 		DefaultWeb.GET(self)
 		web.header('Content-Type', 'text/html')
 		i = web.input()
-		usuario = Usuario(DB)
+
 		if i.has_key('logout'):
 			SESSION.login = None
 			try:
@@ -192,34 +224,11 @@ class DatosUsuario(DefaultWeb):
 		elif i.has_key('login'):
 			return RENDER_BASE.login(None)
 		elif i.has_key('oauth_verifier'):
-			if CONF.has_section("twitter") and 'twitter_token' in SESSION and 'twitter_token_secret' in SESSION:
-				twitter = Twython(CONF.get("twitter", "consumer_key"), CONF.get("twitter", "consumer_secret"), SESSION.twitter_token, SESSION.twitter_token_secret)
-				final_step = twitter.get_authorized_tokens(i.get('oauth_verifier'))
-				if 'oauth_token_secret' in final_step and 'oauth_token' in final_step:
-					SESSION.twitter_token = final_step['oauth_token']
-					SESSION.twitter_token_secret = final_step['oauth_token_secret']
-
-					twitter = Twython(CONF.get("twitter", "consumer_key"), CONF.get("twitter", "consumer_secret"), SESSION.twitter_token, SESSION.twitter_token_secret)
-					response = twitter.verify_credentials()
-					if 'id' in response and 'screen_name' in response:
-						res = usuario.list(0,{'$or':[{'twitter_id':response["id"]},{'twitter':response["screen_name"]}]},[],1)
-						if res['total'] > 0:
-							usuario = res['data'][0]
-						elif 'login' in SESSION and SESSION.login:
-							res = usuario.list(0,{'_id':SESSION.login},[],1)
-							if res['total'] > 0:
-								usuario = res['data'][0]
-								usuario['twitter'] = response["screen_name"]
-								usuario['twitter_id'] = response["id"]
-						else:
-							usuario['twitter'] = response["screen_name"]
-							usuario['twitter_id'] = response["id"]
-							usuario['cifrado'] = gen_random()
-							usuario.save()
-							SESSION.login = usuario.id
-						raise web.seeother('/usuario')
+			self.do_twitter_auth(i.get('oauth_verifier'))
+			return RENDER_BASE.login(['Error con Twitter'])
 		elif i.has_key('validar'):
 			email_key = i.get('key')
+			usuario = Usuario(DB)
 			lista = usuario.list(0,{'email':i.get('validar'), 'email_key': email_key},[],1)
 			if lista['total'] <= 0:
 				raise web.NotFound( RENDER_BASE.error("email no validado") )
@@ -254,50 +263,67 @@ class DatosUsuario(DefaultWeb):
 				return RENDER_BASE.login('Validacion fallida')
 			if not self.do_auth():
 				return RENDER_BASE.login('Usuario o Clave erroneos')
+			raise web.seeother('/usuario')
 
 		self.check_auth()
 
 		if i.get('eliminar_cuenta_tcode'):
-			print "--->",i.get('eliminar_cuenta_tcode')
 			if 'tcode' in SESSION:
-				print "--->",SESSION.tcode
 				if SESSION.tcode == i.get('eliminar_cuenta_tcode'):
 					self.usuario.remove()
 					raise web.seeother('/usuario?logout')
-			else:
-				print "---> QUE NO HAY TCODE", dir(SESSION)
 		if i.get('alert_web'):
 			self.usuario['alert_web']=True
 		else:
 			self.usuario['alert_web']=False
 
-		if i.get('alert_twitter'):
+		if i.get('alert_twitter') and self.usuario['twitter_id']:
 			self.usuario['alert_twitter']=True
 		else:
 			self.usuario['alert_twitter']=False
 
 		if i.get('email'):
-			if i.get('email') == "":
-				self.usuario['email']=None
+			if not valid_email(i.get('email')):
+				return self.GET(["email no valido"])
 			elif i.get('revalidar') and self.usuario['email'] == i.get('email'):
+				if self.usuario['email_valido']:
+					return self.GET(["eMail ya validado"])
+				self.send_valid_mail()
+			elif self.usuario['email'] is None:
+				lista = self.usuario.list(0,{'email':i.get('email')},[],1)
+				if lista['total'] > 0:
+					return self.GET(["email ya registrado"])
+				clave = cifrar_clave(i.get('clave_email'), i.get('email'))
+				self.usuario['email'] = i.get('email')
+				self.usuario['clave'] = clave
 				self.send_valid_mail()
 			elif self.usuario['email'] != i.get('email'):
 				lista = self.usuario.list(0,{'email':i.get('email')},[],1)
 				if lista['total'] > 0:
 					return self.GET(["email ya registrado"])
-				if not valid_email(i.get('email')):
-					return self.GET(["email no valido"])
-				#TODO Enviar verificacion al antiguo email
+				clave = cifrar_clave(i.get('clave_email'), self.usuario['email'])
+				if self.usuario['clave'] != clave:
+					return self.GET(["clave no valida"])
 				self.usuario['email'] = i.get('email')
+				self.usuario['clave'] = cifrar_clave(i.get('clave_email'), i.get('email'))
+				#TODO Enviar verificacion al antiguo email
 				self.send_valid_mail()
-
-
 		if i.get('alert_email'):
-			self.usuario['alert_email']=True
 			if not valid_email(self.usuario['email']):
+				self.usuario['alert_email']=False
 				return self.GET(["email no valido"])
+			self.usuario['alert_email']=True
 		else:
 			self.usuario['alert_email']=False
+
+		if i.get('clave_act'):
+			if i.get('clave_n') != i.get('clave_n2'):
+				return self.GET(["Las claves son distintas"])
+			clave = cifrar_clave(i.get('clave_act'), self.usuario['email'])
+			if self.usuario['clave'] != clave:
+				return self.GET(["clave no valida"])
+			self.usuario['clave'] = cifrar_clave(i.get('clave_n'), self.usuario['email'])
+			
 
 		'''
 			#TODO validar los datos
