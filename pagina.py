@@ -205,8 +205,8 @@ class DatosUsuario(DefaultWeb):
 						res = usuario.list(0,{'$or':[{'twitter_id':response["id"]},{'twitter':response["screen_name"]}]},[],1)
 						if res['total'] > 0:
 							usuario = res['data'][0]
-						elif 'login' in SESSION and SESSION.loggin:
-							res = usuario.list(0,{'_id':SESSION.loggin},[],1)
+						elif 'login' in SESSION and SESSION.login:
+							res = usuario.list(0,{'_id':SESSION.login},[],1)
 							if res['total'] > 0:
 								usuario = res['data'][0]
 								usuario['twitter'] = response["screen_name"]
