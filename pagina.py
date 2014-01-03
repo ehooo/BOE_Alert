@@ -420,7 +420,21 @@ class AvisoAlertas(TablaBase):
 
 		borrar = i.get('borrar')
 		if borrar is not None:
-			elements = db_obj.list(0, {'boe':borrar,'usuario':self.usuario.id}, [], 1)
+			boes = borrar.split(',')
+			if len(boes) > 0:
+				ninguno = True
+				elements = db_obj.list(0, {'boe':{'$in':boes},'usuario':self.usuario.id})
+				if elements['total'] > 0:
+					ninguno = False
+				while elements['total'] > 0:
+					for elem in elements['data']:
+						elem.remove()
+					elements = db_obj.list(0, {'boe':{'$in':boes},'usuario':self.usuario.id})
+				if ninguno:
+					raise web.NotFound(json.dumps({"error":"Avisos no encontrados"}))
+				return json.dumps({"ok":"Avisos borrados"})
+
+			elements = db_obj.list(0, {'boe':{'$in':borrar},'usuario':self.usuario.id}, [], 1)
 			if len(elements['data'])>0:
 				elements['data'][0].remove()
 				return json.dumps({"ok":"Aviso borrado"})

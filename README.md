@@ -1,5 +1,5 @@
 # Licencia
-Copyright (C) 2013  ehooo
+Copyright (C) 2013 [ehooo](https://github.com/ehooo)
 
 This program is free software; you can redistribute it and/or
 modify it under the terms of the GNU General Public License
@@ -134,6 +134,7 @@ Procesa todo el BOE con identificador BOE-S-2013-1
 # TODO
 * Mejora de Pagina Acerca
 * Insertar apartados para cumplir "Ley de Cookies"
+* Borrar usuario
 * Mejorar documentacion sobre configuracion de Reglas
 * Hacer uso de Celery para la busqueda de expresiones regulares
 * Mejorar el Sistema deteccion de reglas

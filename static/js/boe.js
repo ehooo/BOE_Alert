@@ -64,7 +64,7 @@ function pagina_alertas(){
 		"fnDrawCallback":check_boton,
 		"fnRowCallback": prepare_row
     } );
-	
+
 	var boton = $('<button/>',{
 		'type':'button',
 		'class':'btn btn-primary btn-xs',
@@ -74,8 +74,11 @@ function pagina_alertas(){
 	$(".borrar_alerta").wrap(boton);
 
 	$('#alertas_boe_wrapper .borrar_alerta').parent().click(function(){
-		var post_data = $(this.parentNode).find('tr.row_selected');
-		post_data = {'borrar':post_data.attr('id')};
+		var post_data = new Array();
+		jQuery.each($(this.parentNode).find('tr.row_selected'), function(i, element){
+			post_data.push($(element).attr('id'));
+		});
+		post_data = {'borrar': post_data.join() };
 		jQuery.ajax({
 			cache:false,
 			type: 'POST',
@@ -127,7 +130,6 @@ function pagina_alertas(){
 			if ( $(this).hasClass('row_selected') ) {
 				$(this).removeClass('row_selected');
 			} else {
-				$(this.parentNode).children('tr.row_selected').removeClass('row_selected');
 				$(this).addClass('row_selected');
 			}
 			check_boton();
