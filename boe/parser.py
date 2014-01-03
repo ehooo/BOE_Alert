@@ -100,8 +100,10 @@ class BasicParser():
 		reglas = Regla(DB)
 		encontradas = {'total':1}
 		pag = 0
-		while encontradas['total']>pag:
-			encontradas = reglas.list(pag, query,[],10)
+		chuck = 10
+		encontradas = reglas.list(pag, query,[],chuck)
+		total = encontradas['total']/chuck
+		while pag<total:
 			for elem in encontradas['data']:
 				tre = elem['re_'+cache]
 				s = False
@@ -116,12 +118,13 @@ class BasicParser():
 					#m_ = tre.match(paja) is not None
 					#m = m_ is not None
 					if cache and cache in self.re_cache:
-						self.re_cache[cache][tre] = { 'search':s}#, 'match':m }
+						self.re_cache[cache][tre] = { 'search':s }#, 'match':m }
 				if s:# or m:
 					#logging.debug("search %s %s"%(s,tre))
 					#logging.debug("match %s %s"%(m,tre))
 					self.alert(elem)
 			pag += 1
+			encontradas = reglas.list(pag, query,[],chuck)
 	def handle_starttag(self, tag, attrs):
 		pass
 	def handle_endtag(self, tag):

@@ -57,7 +57,7 @@ URLS = (
 
 APP = web.application(URLS, globals())
 
-SESSION = web.session.Session(APP, web.session.DiskStore(CONF.get("web", "cookie_dir")), initializer={'login': None, 'cifrado':None})
+SESSION = web.session.Session(APP, web.session.DiskStore(CONF.get("web", "cookie_dir")), initializer={'login': None, 'tcode':None, 'cifrado':None})
 
 def genClave(forcegen=False):
 	clave = gen_random()
@@ -68,7 +68,11 @@ def genClave(forcegen=False):
 		SESSION.cifrado = None
 	return clave
 
-GLOBALS = {'clave_cifrado':genClave, 'twitter_url':twitter_url}
+def get_tcode():
+	SESSION.tcode = gen_random()
+	return SESSION.tcode
+
+GLOBALS = {'clave_cifrado':genClave, 'twitter_url':twitter_url, 'get_tcode':get_tcode}
 RENDER = web.template.render(CONF.get('web','tema'),globals=GLOBALS)
 RENDER_BASE = web.template.render(CONF.get('web','tema'), base='base',globals=GLOBALS)
 
@@ -78,6 +82,7 @@ def get_usuario():
 	usuario = Usuario(DB)
 	usuario.id = SESSION.login
 	return usuario
+
 
 class DefaultWeb:
 	DEF__NUM_PAG = 10
@@ -251,6 +256,16 @@ class DatosUsuario(DefaultWeb):
 				return RENDER_BASE.login('Usuario o Clave erroneos')
 
 		self.check_auth()
+
+		if i.get('eliminar_cuenta_tcode'):
+			print "--->",i.get('eliminar_cuenta_tcode')
+			if 'tcode' in SESSION:
+				print "--->",SESSION.tcode
+				if SESSION.tcode == i.get('eliminar_cuenta_tcode'):
+					self.usuario.remove()
+					raise web.seeother('/usuario?logout')
+			else:
+				print "---> QUE NO HAY TCODE", dir(SESSION)
 		if i.get('alert_web'):
 			self.usuario['alert_web']=True
 		else:

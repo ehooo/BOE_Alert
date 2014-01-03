@@ -12,4 +12,11 @@
 #alertas_boe img{ height: 25px; }
 #admin_reglas .nav-tabs{ background-color: #DDDDDD; border-radius: 4px; }
 #admin_reglas { border-bottom: none; }
+#eliminar_cuenta {
+	float: right;
+	position: relative;
+	right: 10px;
+	top: -60px;
+}
+
 label, th, .btn, .pull-right { text-transform: capitalize; }

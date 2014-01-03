@@ -58,6 +58,7 @@ def envia_alerta(alerta_id):
 			envia_dm.apply_async(kwargs={'usuario':usuario['twitter'],"contenido":contenido})
 		else:
 			envia_dm(usuario['twitter'], contenido)
+	usuario.clean_alertas()
 
 @task
 def envia_email(correo, subject, plain, html=None):

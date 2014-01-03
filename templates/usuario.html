@@ -73,6 +73,12 @@ $else:
 <div class="panel-footer">
 <input type="submit" value="guardar" class="btn btn-primary"/>
 <a href="/usuario?logout" class="btn btn-primary">Salir</a>
+
 </div>
 </div>
+</form>
+
+<form id="eliminar_cuenta" method="POST" role="form">
+<input type="hidden" value="$get_tcode()" name="eliminar_cuenta_tcode"/>
+<input type="submit" value="eliminar cuenta" class="btn btn-danger"/>
 </form>

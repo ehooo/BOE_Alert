@@ -134,7 +134,6 @@ Procesa todo el BOE con identificador BOE-S-2013-1
 # TODO
 * Mejora de Pagina Acerca
 * Insertar apartados para cumplir "Ley de Cookies"
-* Borrar usuario
 * Mejorar documentacion sobre configuracion de Reglas
 * Hacer uso de Celery para la busqueda de expresiones regulares
 * Mejorar el Sistema deteccion de reglas

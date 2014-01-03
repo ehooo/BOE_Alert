@@ -81,8 +81,23 @@ class DBObject(object):
 		if self.id:
 			self.getConexion().remove({'_id':self.id})
 
+from datetime import timedelta
 class Usuario(DBObject):
-	pass
+	def remove(self):
+		if self.id:
+			Alertas(self._orig_conn).getConexion().remove({'usuario':self.id})
+			Regla(self._orig_conn).getConexion().remove({'usuario':self.id})
+		DBObject.remove(self)
+	def clean_alertas(self):
+		if self.id:
+			alertas = Alertas(self._orig_conn)
+			ultima = alertas.list(0, {'usuario':self.id}, [('fecha',-1)], 1)
+			dias = self['clean_dias']
+			if not dias:
+				dias = 5
+			if len(ultima['data']) > 0:
+				borrar = ultima['data'][0]['fecha'] - timedelta(dias)
+				alertas.getConexion().remove({'usuario':self.id, 'fecha':{'$lt':borrar}})
 
 class Alertas(DBObject):
 	def add(self, regla, boe, fecha):

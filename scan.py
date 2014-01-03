@@ -2,8 +2,7 @@ from boe.utils import cargar_conf, wget_url, FICHERO_CONFIGURACION
 from boe.parser import BoeDiaParser
 from boe.processing import procesa_boe
 
-import logging, httplib, urllib2, urlparse, re
-from xml.parsers.expat import ParserCreate, ExpatError
+import logging, httplib
 from datetime import datetime
 
 
@@ -41,7 +40,7 @@ if __name__ == "__main__":
 	inicio = datetime.strptime(args.inicio, FORMATO_FECHA)
 	fin = datetime.strptime(args.fin, FORMATO_FECHA)
 	undia = timedelta(1)
-	
+
 	CONF = cargar_conf(FICHERO_CONFIGURACION)
 
 	if args.boe is not None:
