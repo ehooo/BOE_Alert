@@ -11,7 +11,8 @@ if abspath!='':
 	os.chdir(abspath)
 
 from boe.db import DBConnector, Usuario, PalagraClave, Regla, Alertas
-from boe.utils import cargar_conf, FICHERO_CONFIGURACION, gen_random, cifrar_clave, cifrar_id, descifrar_id
+from boe.utils import cargar_conf, FICHERO_CONFIGURACION, gen_random, cifrar_clave, cifrar_id, descifrar_id, valid_email, html2plain
+from boe.processing import envia_email
 import logging
 
 CONF = cargar_conf(FICHERO_CONFIGURACION)
@@ -23,39 +24,11 @@ from twython import Twython
 def twitter_url():
 	if CONF.has_section("twitter"):
 		twitter = Twython(CONF.get("twitter", "consumer_key"), CONF.get("twitter", "consumer_secret"))
-
-		auth = twitter.get_authentication_tokens(callback_url=CONF.get("twitter", "callback"))
+		auth = twitter.get_authentication_tokens(callback_url="http://%s/usuario"%(web.ctx.host))
 		SESSION.twitter_token = auth['oauth_token']
 		SESSION.twitter_token_secret = auth['oauth_token_secret']
 		return auth['auth_url']
 	return ""
-def twitter_login(oauth_verifier):
-	if CONF.has_section("twitter") and 'twitter_token' in SESSION and 'twitter_token_secret' in SESSION:
-		twitter = Twython(CONF.get("twitter", "consumer_key"), CONF.get("twitter", "consumer_secret"), SESSION.twitter_token, SESSION.twitter_token_secret)
-		final_step = twitter.get_authorized_tokens(oauth_verifier)
-		if 'oauth_token_secret' in final_step and 'oauth_token' in final_step:
-			SESSION.twitter_token = final_step['oauth_token']
-			SESSION.twitter_token_secret = final_step['oauth_token_secret']
-
-			twitter = Twython(CONF.get("twitter", "consumer_key"), CONF.get("twitter", "consumer_secret"), SESSION.twitter_token, SESSION.twitter_token_secret)
-			response = twitter.verify_credentials()
-			if 'id' in response and 'screen_name' in response:
-				usuario = Usuario(DB)
-				res = usuario.list(0,{'$or':[{'twitter_id':response["id"]},{'twitter':response["screen_name"]}]},[],1)
-				if res['total'] > 0:
-					usuario = res['data'][0]
-				elif 'login' in SESSION and SESSION.loggin:
-					res = usuario.list(0,{'_id':SESSION.loggin},[],1)
-					if res['total'] > 0:
-						usuario = res['data'][0]
-					usuario['twitter'] = response["screen_name"]
-				else:
-					usuario['twitter'] = response["screen_name"]
-					usuario.save()
-				if not 'twitter_id' in usuario:
-					usuario['twitter_id'] = response["id"]
-				SESSION.login = usuario.id
-				raise web.seeother('/usuario')
 
 if CONF.has_option("web", "cookie_name"):
 	web.config.session_parameters['cookie_name'] = CONF.get("web", "cookie_name")
@@ -142,8 +115,10 @@ class DefaultWeb:
 				self.usuario = res['data'][0]
 				SESSION.login = self.usuario.id
 			else:
-				usuario['alert_web']=True
-				usuario.save()
+				self.usuario = Usuario(DB)
+				self.usuario['alert_web']=True
+				self.usuario['cifrado'] = gen_random()
+				self.usuario.save()
 
 		if not 'login' in SESSION or SESSION.login is None:
 			raise web.seeother('/usuario?login')
@@ -152,19 +127,11 @@ class DefaultWeb:
 			self.usuario = res['data'][0]
 		else:
 			SESSION.login = None
-			'''
-				usuario['alert_web']=True
-				usuario['alert_email']=False
-				usuario['email']=""
-				usuario['alert_twitter']=False
-				usuario['twitter']=""
-				usuario['alert_sms']=False
-				usuario['sms']=""
-				usuario.save()
-			#'''
 	def do_auth(self):
 		i = web.input()
 		email = i.get('email')
+		if not valid_email(email):
+			return False
 		clave = cifrar_clave(i.get('clave'), email)
 		SESSION.login = None
 		usuario = Usuario(DB)
@@ -173,10 +140,11 @@ class DefaultWeb:
 			usuario = res['data'][0]
 			if usuario['clave'] == clave:
 				SESSION.login = usuario.id
-		elif False:#TODO Auto registro y Mecanismo de validacion del email
+		elif False:#TODO Auto registro
 			usuario['email'] = email
 			usuario['clave'] = clave
-			usuario['valid_mail'] = False
+			usuario['email_valido'] = False
+			usuario['cifrado'] = gen_random()
 			usuario.save()
 			SESSION.login = usuario.id
 		return usuario.id is not None
@@ -202,22 +170,76 @@ class Estatico(DefaultWeb):
 	def GET(self, path=None):
 		DefaultWeb.GET(self)
 		web.header('Content-Type', 'text/html')
-		return RENDER_BASE.acerca()
+		return RENDER_BASE.acerca( open('README.md','r').read() )
 
 class DatosUsuario(DefaultWeb):
 	def GET(self, errores=None):
 		DefaultWeb.GET(self)
 		web.header('Content-Type', 'text/html')
 		i = web.input()
+		usuario = Usuario(DB)
 		if i.has_key('logout'):
 			SESSION.login = None
-			SESSION.kill()
+			try:
+				SESSION.kill()
+			except:
+				pass
 		elif i.has_key('login'):
 			return RENDER_BASE.login(None)
 		elif i.has_key('oauth_verifier'):
-			twitter_login(i.get('oauth_verifier'))
+			if CONF.has_section("twitter") and 'twitter_token' in SESSION and 'twitter_token_secret' in SESSION:
+				twitter = Twython(CONF.get("twitter", "consumer_key"), CONF.get("twitter", "consumer_secret"), SESSION.twitter_token, SESSION.twitter_token_secret)
+				final_step = twitter.get_authorized_tokens(i.get('oauth_verifier'))
+				if 'oauth_token_secret' in final_step and 'oauth_token' in final_step:
+					SESSION.twitter_token = final_step['oauth_token']
+					SESSION.twitter_token_secret = final_step['oauth_token_secret']
+
+					twitter = Twython(CONF.get("twitter", "consumer_key"), CONF.get("twitter", "consumer_secret"), SESSION.twitter_token, SESSION.twitter_token_secret)
+					response = twitter.verify_credentials()
+					if 'id' in response and 'screen_name' in response:
+						res = usuario.list(0,{'$or':[{'twitter_id':response["id"]},{'twitter':response["screen_name"]}]},[],1)
+						if res['total'] > 0:
+							usuario = res['data'][0]
+						elif 'login' in SESSION and SESSION.loggin:
+							res = usuario.list(0,{'_id':SESSION.loggin},[],1)
+							if res['total'] > 0:
+								usuario = res['data'][0]
+								usuario['twitter'] = response["screen_name"]
+								usuario['twitter_id'] = response["id"]
+						else:
+							usuario['twitter'] = response["screen_name"]
+							usuario['twitter_id'] = response["id"]
+							usuario['cifrado'] = gen_random()
+							usuario.save()
+							SESSION.login = usuario.id
+						raise web.seeother('/usuario')
+		elif i.has_key('validar'):
+			email_key = i.get('key')
+			lista = usuario.list(0,{'email':i.get('validar'), 'email_key': email_key},[],1)
+			if lista['total'] <= 0:
+				raise web.NotFound( RENDER_BASE.error("email no validado") )
+			usuario = lista['data'][0]
+			usuario['email_valido'] = True
+			SESSION.login = usuario.id
+
 		self.check_auth()
+		if self.usuario['email'] is not None and self.usuario['email'] != '' and not self.usuario['email_valido']:
+			if errores is None:
+				errores = []
+			errores.append('email no validado')
+
 		return RENDER_BASE.usuario(self.usuario, errores)
+	def send_valid_mail(self):
+		self.usuario['email_valido'] = False
+		self.usuario['email_key'] = gen_random()
+		email_key = self.usuario['email_key']
+		url = "http://%s/usuario?validar=%s&key=%s" % (web.ctx.host, self.usuario['email'], email_key)
+		html = str( RENDER.validar_email(url, web.ctx.ip) )
+		plain = html2plain(html)
+		if CONF.getboolean("celery", "activo"):
+			envia_email.apply_async(kwargs={'correo':self.usuario['email'], 'subject':"Validar email", 'plain':plain, 'html':html})
+		else:
+			envia_email(self.usuario['email'], "Validar email", plain, html)
 	def POST(self):
 		DefaultWeb.POST(self)
 		i = web.input()
@@ -233,20 +255,37 @@ class DatosUsuario(DefaultWeb):
 			self.usuario['alert_web']=True
 		else:
 			self.usuario['alert_web']=False
+
+		if i.get('alert_twitter'):
+			self.usuario['alert_twitter']=True
+		else:
+			self.usuario['alert_twitter']=False
+
+		if i.get('email'):
+			if i.get('email') == "":
+				self.usuario['email']=None
+			elif i.get('revalidar') and self.usuario['email'] == i.get('email'):
+				self.send_valid_mail()
+			elif self.usuario['email'] != i.get('email'):
+				lista = self.usuario.list(0,{'email':i.get('email')},[],1)
+				if lista['total'] > 0:
+					return self.GET(["email ya registrado"])
+				if not valid_email(i.get('email')):
+					return self.GET(["email no valido"])
+				#TODO Enviar verificacion al antiguo email
+				self.usuario['email'] = i.get('email')
+				self.send_valid_mail()
+
+
+		if i.get('alert_email'):
+			self.usuario['alert_email']=True
+			if not valid_email(self.usuario['email']):
+				return self.GET(["email no valido"])
+		else:
+			self.usuario['alert_email']=False
+
 		'''
 			#TODO validar los datos
-			if i.get('alert_email'):
-				usuario['alert_email']=True
-			else:
-				usuario['alert_email']=False
-			if i.get('email'):
-				usuario['email']=i.get('email')
-			if i.get('alert_twitter'):
-				usuario['alert_twitter']=True
-			else:
-				usuario['alert_twitter']=False
-			if i.get('twitter'):
-				usuario['twitter']=i.get('twitter')
 			if i.get('alert_sms'):
 				usuario['alert_sms']=True
 			else:

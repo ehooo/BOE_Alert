@@ -24,7 +24,7 @@ $else:
 </label>
 </fieldset>
 
-<fieldset class="no_implementado panel panel-info">
+<fieldset class="panel panel-info">
 <div class="panel-heading"><span class="glyphicon glyphicon-envelope"></span>
 <legend class="panel-title">Datos de eMail:</legend>
 </div>
@@ -36,10 +36,12 @@ $else:
 </label>
 <label for="email" >eMail</label>
 <input id="email" type="email" value="$usuario['email']" placeholder="ejemplo@boe.es" name="email" />
+$if usuario['email'] and not usuario['email_valido']:
+	<input type="submit" value="reenviar validaci&oacute;n" class="btn btn-primary" name="revalidar"/>
 </fieldset>
 
-<fieldset class="no_implementado panel panel-info"><div class="panel-heading"><legend class="panel-title">Datos para Twitter:</legend></div>
-$if usuario['twitter'] or usuario['twitter']=="":
+<fieldset class="panel panel-info"><div class="panel-heading"><legend class="panel-title">Datos para Twitter:</legend></div>
+$if usuario['twitter'] and usuario['twitter']!="":
 	<label>Enviar alerta por DM
 	$if usuario['alert_twitter'] == True:
 		<input type="checkbox" value="true" checked="checked" name="alert_twitter" />
@@ -51,7 +53,7 @@ $if usuario['twitter'] or usuario['twitter']=="":
 $else:
 	<a href="$twitter_url()" class="btn btn-info"><img src="/static/images/sign-in-with-twitter-link.png" alt="Accede con twitter"/></a>
 </fieldset>
-
+<!--
 <fieldset class="no_implementado panel panel-info">
 <div class="panel-heading"><span class="glyphicon glyphicon-phone"></span>
 <legend class="panel-title">Datos para SMS:</legend>
@@ -66,6 +68,7 @@ $else:
 <label for="sms">N&uacute;mero m&oacute;vil</label>
 <input type="tel" value="$usuario['sms']" name="sms" placeholder="666666666" maxlength="12" />
 </fieldset>
+-->
 </div>
 <div class="panel-footer">
 <input type="submit" value="guardar" class="btn btn-primary"/>

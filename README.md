@@ -75,8 +75,15 @@ permite usar como salida a intenet el proxy configurado en el equipo, util si se
 * #[twitter]\(OPCIONAL)
  * consumer_key = Clave Twitter
  * consumer_secret = Clave secreta de Twitter
- * callback = Callback para Twitter
-
+* #[email]\(OPCIONAL)
+ * email = Email de envio del correo
+ * server = Host del servidor de corre
+ * port = Puerto del servidor de correo
+ * ssl = Un valor Verdadero o Falso para [ConfigParser](http://docs.python.org/2/library/#ConfigParser.RawConfigParser.getboolean) para activar SSL
+ * tls = Un valor Verdadero o Falso para [ConfigParser](http://docs.python.org/2/library/#ConfigParser.RawConfigParser.getboolean) para activar TLS
+ * #usuario = (OPCIONAL)Usuario si es necesario identificarse contra el servidor 
+ * #clave = (OPCIONAL)Clave si es necesario identificarse contra el servidor
+ 
 # Dependencias:
 * __[pymongo](http://api.mongodb.org/python/current/ "PyMongo"):__ Como conector con la base de datos [MongoDB](http://www.mongodb.org/).
 * __[WebPy](https://github.com/webpy/webpy "Framework WebPy"):__ Simple web Framework para Python.
@@ -125,13 +132,11 @@ Procesa todo el BOE con identificador BOE-S-2013-1
 `$ python boe_parser.py --boe BOE-S-2013-1`
 
 # TODO
-* Pagina Acerca
+* Mejora de Pagina Acerca
 * Insertar apartados para cumplir "Ley de Cookies"
 * Mejorar documentacion sobre configuracion de Reglas
 * Hacer uso de Celery para la busqueda de expresiones regulares
 * Mejorar el Sistema deteccion de reglas
-* Envio por eMail
-* Validacion del eMail
-* Sistema de registro por eMail
+* Poder cancelar la validacion de un nuevo eMail
 * Envio de DM por Twitter
 * Mejorar cifrado de algunos datos

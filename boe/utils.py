@@ -7,8 +7,21 @@ try:
 except:
 	#Para Windows
 	from bson.objectid import ObjectId
-import os, ConfigParser, logging, hashlib, random
-import httplib, urllib2, urlparse
+try:
+	#https://github.com/dlitz/pycrypto
+	from Crypto.Random import random
+	from Crypto.Cipher import AES
+
+	#https://github.com/boppreh/simplecrypto
+	from simplecrypto import encrypt, decrypt
+
+	#https://github.com/andrewcooke/simple-crypt
+	from simplecrypt import encrypt, decrypt
+except:
+	import random
+
+import os, ConfigParser, logging, hashlib, base64
+import httplib, urllib2, urlparse, socket
 
 FICHERO_CONFIGURACION = os.path.dirname(__file__) + "/../boe.conf"
 def cargar_conf(fichero):
@@ -34,23 +47,43 @@ def gen_clave(usuario):
 	return clave.hexdigest()
 
 def cifrar_id(id, usuario):
-	return str(id)
+	ret = str(id)
+	#h = AES.new(usuario['cifrado'], AES.MODE_CBC, str(usuario.id))
+	#ret = h.encrypt(ret)
+	#ret = encrypt(ret, usuario['cifrado'])
+	#ret = encrypt(usuario['cifrado'], ret)
+	return base64.b64encode( ret )
 def descifrar_id(cid, usuario):
-	return ObjectId(cid)
+	ret = base64.b64decode(cid)
+	#h = AES.new(usuario['cifrado'], AES.MODE_CBC, str(usuario.id))
+	#ret = h.decrypt(ret)
+	#ret = decrypt(ret, usuario['cifrado'])
+	#ret = decrypt(usuario['cifrado'], ret)
+	return ObjectId( ret )
 def cifrar_clave(clave, email):
-	return hashlib.sha256(clave + hashlib.md5(email).hexdigest() ).hexdigest()
-def gen_random():
-	clave = ""
+	(usuario, dominio) = email.split('@',1)
+	h = hashlib.sha256()
+	h.update(hashlib.md5(usuario).hexdigest())
+	h.update(clave)
+	h.update(hashlib.md5(dominio).hexdigest())
+	return  h.hexdigest()
+def gen_random(salt=None):
+	clave = hashlib.sha256()
+	if salt:
+		clave.update(salt)
+	else:
+		clave.update(os.urandom(5))
+	clave.update(str(os.getpid()))
 	for i in range(random.randint(5, 10)):
-		g = random.choice('0123456789')
+		g = int(random.choice('0123456789'))
 		for i in random.choice('abcdefghijklmnopqrstuvwxyz'):
-			if (int(g)%2) == 0:
-				clave += i
+			if (g%2) == 0:
+				clave.update(i)
 			else:
-				clave += i.upper()
-			if (int(g)%3) == 0:
-				clave += random.choice('0123456789')
-	return hashlib.sha256(clave).hexdigest()
+				clave.update(i.upper())
+			if (g%3) == 0:
+				clave.update(random.choice('0123456789'))
+	return clave.hexdigest()
 
 def get_mongo_uri(conf):
 	credencial = ""
@@ -71,6 +104,47 @@ def get_attr(attrs, key):
 		if k == key:
 			return v
 	return None
+
+from HTMLParser import HTMLParser
+class HTML_Plain(HTMLParser):
+	def __init__(self):
+		HTMLParser.__init__(self)
+		self.plain = ""
+		self.href = None
+	def handle_data(self, data):
+		self.plain += data
+	def handle_starttag(self, tag, attrs):
+		if tag == 'a':
+			self.href = get_attr(attrs, 'href')
+			if self.href is not None:
+				self.plain += "["
+	def handle_endtag(self, tag):
+		if tag == 'a' and self.href is not None:
+			self.plain += "](%s)"%self.href
+def html2plain(html):
+	parser = HTML_Plain()
+	parser.feed(html)
+	return parser.plain
+
+def valid_email(email):
+	ok = False
+	try:
+		(usuario, dominio) = email.split('@',1)
+		urlparse.urlparse("http://%s"%dominio)
+		try:
+			socket.gethostbyname(dominio)
+			ok = True
+		except:#For IPv6
+			for port in [25,587,465]:
+				try:
+					socket.getaddrinfo(dominio, port)
+					ok = True
+					break
+				except:
+					pass
+	except:
+		pass
+	return ok
 
 def wget(host, path, cabezera={}, tipo="GET", post=None):
 	logging.debug("%s%s %s"%(host, path, cabezera))
