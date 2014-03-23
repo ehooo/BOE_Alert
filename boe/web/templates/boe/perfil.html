@@ -1,0 +1,77 @@
+{% extends 'base.html' %}
+{% load url from future %}
+{% load i18n %}
+
+{% block addheader %}{% if not perfil.has_email %}
+<script type="text/javascript">
+$( document ).ready(function(){
+var a = $('#asigna_mail input[type="button"]');
+	$('#asigna_mail input[type="button"]').click(function(){
+		$('#asigna_mail').submit();
+	});
+});
+</script>
+{% endif %}{% endblock %}
+
+{% block content_title %}{% trans 'perfil' %}{% endblock %}
+{% block content %}
+<form id="datos_usuario" method="POST" role="form" action="" >
+{% csrf_token %}
+<div class="panel panel-primary">
+<div class="panel-heading"><h1 class="panel-title">{% trans 'Datos de usuario' %}</h1></div>
+<div class="panel-body">
+
+<fieldset class="panel panel-info">
+<div class="panel-heading"><span class="glyphicon glyphicon-globe"></span>
+<legend class="panel-title">{% trans 'Datos Web' %}:</legend></div>
+{{ form.envia_web.errors }}
+<label>{{ form.envia_web.label }}
+	{{ form.envia_web }}
+</label>
+</fieldset>
+
+<fieldset class="panel panel-info">
+<div class="panel-heading"><span class="glyphicon glyphicon-envelope"></span>
+<legend class="panel-title">{% trans 'Datos de eMail' %}:</legend></div>
+{{ form.envia_email.errors }}
+<label>{{ form.envia_email.label }}
+	{{ form.envia_email }}
+</label>
+	{% if not perfil.has_email %}
+	<form action="{% url 'social:complete' 'email' %}" method="post" id="asigna_mail">
+		{% csrf_token %}
+		<label for="email">{% trans 'Email address' %}:</label>
+		<input id="email" type="email" name="email" value="" />
+
+		<label for="password">{% trans 'Password' %}:</label>
+		<input id="password" type="password" name="password" value="" />
+		<input type="hidden" name="next" value="{{ next }}" />
+
+		<input type="button" value="{% trans 'asignar' %}" class="btn btn-primary"/>
+	</form>
+	{% endif %}
+</fieldset>
+
+<fieldset class="panel panel-info">
+<div class="panel-heading"><legend class="panel-title">{% trans 'Datos para Twitter' %}:</legend></div>
+{{ form.envia_twitter.errors }}
+<label>{{ form.envia_twitter.label }}
+	{{ form.envia_twitter }}
+	{% if not perfil.has_twitter %}
+	<a href="{% url 'social:begin' 'twitter' %}" id="twitter">Twitter</a>
+	{% endif %}
+</label>
+</fieldset>
+
+<!-- TODO -->
+<div class="panel-footer">
+<input type="submit" value="{% trans 'guardar' %}" class="btn btn-primary"/>
+</form>
+
+<!-- #TODO 
+<form id="eliminar_cuenta" method="POST" role="form" action="" >
+{% csrf_token %}
+<input type="submit" value="{% trans 'eliminar cuenta' %}" class="btn btn-danger"/>
+</form>
+-->
+{% endblock %}
