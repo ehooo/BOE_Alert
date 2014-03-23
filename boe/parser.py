@@ -1,20 +1,16 @@
 '''
 
 '''
-import logging, httplib, urllib2, urlparse, re
+from __future__ import absolute_import
+from .utils import get_attr
+from .db import Regla, PalagraClave, Alertas
 
+import logging, httplib, urllib2, urlparse, re
 from xml.parsers.expat import ParserCreate, ExpatError
 from HTMLParser import HTMLParser
 from datetime import datetime
 
-from utils import get_attr, cargar_conf, FICHERO_CONFIGURACION
-from db import Regla, PalagraClave, DBConnector, Alertas
-
 FORMATO_FECHA = "%Y/%m/%d"
-
-CONF = cargar_conf(FICHERO_CONFIGURACION)
-DB = DBConnector(CONF)
-
 
 class BoeDiaParser(HTMLParser):
 	URL_DATE_FORMAT = "http://boe.es/boe/dias/%Y/%m/%d/"
@@ -45,8 +41,9 @@ class BoeDiaParser(HTMLParser):
 			self.en_link = False
 
 class BasicParser():
-	def __init__(self, boe):
+	def __init__(self, db, boe):
 		self.boe = boe
+		self.db = db
 		self.en_fecha = False
 		self.fecha = None
 		self.en_titulo = False
@@ -64,13 +61,12 @@ class BasicParser():
 	def feed(self, contenido):
 		self.p.Parse(contenido)
 	def alert(self, regla):
-		alerta = Alertas(DB).add(regla, self.boe, self.fecha)
+		alerta = Alertas(self.db).add(regla, self.boe, self.fecha)
 		if not alerta.id in self.to_alert:
 			self.to_alert.append(alerta.id)
 		if not regla.id in self.in_regla:
 			self.in_regla.append(regla.id)
-
-	def alertAll(self, query):
+	def alerta_todo(self, query):
 		if self.tipo:
 			query['tipo'] = self.tipo
 		for clave in self.claves:
@@ -78,7 +74,7 @@ class BasicParser():
 				query[clave] = {'$exists':False}
 		query["id"] = {"$nin":self.in_regla}
 
-		reglas = Regla(DB)
+		reglas = Regla(self.db)
 		encontradas = {'total':1}
 		pag = 0
 		while encontradas['total']>pag:
@@ -86,9 +82,9 @@ class BasicParser():
 			for elem in encontradas['data']:
 				self.alert(elem)
 			pag += 1
-	def alertTitulo(self, query):
-		self.alertRe(query, self.titulo, 'titulo')
-	def alertRe(self, query, paja, cache='titulo'):
+	def alerta_titulo(self, query):
+		self.alerta_re(query, self.titulo, 'titulo')
+	def alerta_re(self, query, paja, cache='titulo'):
 		if self.tipo:
 			query['tipo'] = self.tipo
 		query['re_'+cache] = {'$exists':True}
@@ -97,7 +93,7 @@ class BasicParser():
 				query[clave] = {'$exists':False}
 		query["id"] = {"$nin":self.in_regla}
 
-		reglas = Regla(DB)
+		reglas = Regla(self.db)
 		encontradas = {'total':1}
 		pag = 0
 		chuck = 10
@@ -125,6 +121,7 @@ class BasicParser():
 					self.alert(elem)
 			pag += 1
 			encontradas = reglas.list(pag, query,[],chuck)
+
 	def handle_starttag(self, tag, attrs):
 		pass
 	def handle_endtag(self, tag):
@@ -133,11 +130,11 @@ class BasicParser():
 		pass
 
 class BoeSParser(BasicParser):
-	def __init__(self, boe):
-		BasicParser.__init__(self, boe)
-		self.act_sec = PalagraClave(DB)
-		self.act_dep = PalagraClave(DB)
-		self.act_epi = PalagraClave(DB)
+	def __init__(self, db, boe):
+		BasicParser.__init__(self, db, boe)
+		self.act_sec = PalagraClave(self.db)
+		self.act_dep = PalagraClave(self.db)
+		self.act_epi = PalagraClave(self.db)
 		self.malformado = False
 		self.boes = []
 		self.tipo = 'S'
@@ -150,23 +147,23 @@ class BoeSParser(BasicParser):
 			if tag == 'seccion':
 				self.act_sec[tag] = valor
 				if self.act_sec.id:
-					self.alertAll({'seccion':self.act_sec.id})
+					self.alerta_todo({'seccion':self.act_sec.id})
 			elif tag == 'departamento':
 				self.act_dep[tag] = valor
 				if self.act_dep.id:
-					self.alertAll({'departamento':self.act_dep.id})
+					self.alerta_todo({'departamento':self.act_dep.id})
 					if self.act_sec.id:
-						self.alertAll({'seccion':self.act_sec.id,'departamento':self.act_dep.id})
+						self.alerta_todo({'seccion':self.act_sec.id,'departamento':self.act_dep.id})
 			elif tag == 'epigrafe':
 				self.act_epi[tag] = valor
 				if self.act_epi.id:
-					self.alertAll({'epigrafe':self.act_epi.id})
+					self.alerta_todo({'epigrafe':self.act_epi.id})
 					if self.act_dep.id:
-						self.alertAll({'departamento':self.act_dep.id,'epigrafe':self.act_epi.id})
+						self.alerta_todo({'departamento':self.act_dep.id,'epigrafe':self.act_epi.id})
 						if self.act_sec.id:
-							self.alertAll({'seccion':self.act_sec.id,'departamento':self.act_dep.id,'epigrafe':self.act_epi.id})
+							self.alerta_todo({'seccion':self.act_sec.id,'departamento':self.act_dep.id,'epigrafe':self.act_epi.id})
 					if self.act_sec.id:
-						self.alertAll({'seccion':self.act_sec.id,'epigrafe':self.act_epi.id})
+						self.alerta_todo({'seccion':self.act_sec.id,'epigrafe':self.act_epi.id})
 		elif tag == 'item':
 			self.boes.append( attrs['id'] )
 		elif tag == 'titulo':
@@ -181,21 +178,21 @@ class BoeSParser(BasicParser):
 		elif tag == 'epigrafe':
 			self.act_epi.id = None
 		elif tag == 'titulo':
-			self.alertTitulo({})
+			self.alerta_titulo({})
 			if self.act_epi.id:
-				self.alertTitulo({'epigrafe':self.act_epi.id})
+				self.alerta_titulo({'epigrafe':self.act_epi.id})
 				if self.act_dep.id:
-					self.alertTitulo({'departamento':self.act_dep.id,'epigrafe':self.act_epi.id})
+					self.alerta_titulo({'departamento':self.act_dep.id,'epigrafe':self.act_epi.id})
 					if self.act_sec.id:
-						self.alertTitulo({'seccion':self.act_sec.id,'departamento':self.act_dep.id,'epigrafe':self.act_epi.id})
+						self.alerta_titulo({'seccion':self.act_sec.id,'departamento':self.act_dep.id,'epigrafe':self.act_epi.id})
 				if self.act_sec.id:
-					self.alertTitulo({'seccion':self.act_sec.id,'epigrafe':self.act_epi.id})
+					self.alerta_titulo({'seccion':self.act_sec.id,'epigrafe':self.act_epi.id})
 			if self.act_dep.id:
-				self.alertTitulo({'departamento':self.act_dep.id})
+				self.alerta_titulo({'departamento':self.act_dep.id})
 				if self.act_sec.id:
-					self.alertTitulo({'seccion':self.act_sec.id,'departamento':self.act_dep.id})
+					self.alerta_titulo({'seccion':self.act_sec.id,'departamento':self.act_dep.id})
 			if self.act_sec.id:
-				self.alertTitulo({'seccion':self.act_sec.id})
+				self.alerta_titulo({'seccion':self.act_sec.id})
 			self.titulo = ""
 			self.en_titulo = False
 			self.malformado = False
@@ -208,23 +205,23 @@ class BoeSParser(BasicParser):
 			self.titulo += data.strip()
 
 class BoeTexto(BasicParser):
-	def __init__(self, boe):
-		BasicParser.__init__(self, boe)
+	def __init__(self, db, boe):
+		BasicParser.__init__(self, db, boe)
 		self.en_texto = False
 		self.texto = ""
 		self.re_cache['titulo'] = {}
 		self.re_cache['texto'] = {}
-	def alertTitulo(self, query):
-		BasicParser.alertRe(self, query, self.titulo, 'titulo')
-	def alertTexto(self, query):
-		self.alertRe(query, self.texto, 'texto')
-	def alertTT(self, query):
+	def alerta_titulo(self, query):
+		BasicParser.alerta_re(self, query, self.titulo, 'titulo')
+	def alerta_texto(self, query):
+		self.alerta_re(query, self.texto, 'texto')
+	def alerta_tt(self, query):
 		if self.tipo:
 			query['tipo'] = self.tipo
 		query['re_texto'] = {'$exists':True}
 		query['re_titulo'] = {'$exists':True}
 
-		reglas = Regla(DB)
+		reglas = Regla(self.db)
 		encontradas = {'total':1}
 		pag = 0
 		while encontradas['total']>pag:
@@ -268,11 +265,11 @@ class BoeTexto(BasicParser):
 			pag += 1
 
 class BoeAParser(BoeTexto):
-	def __init__(self, boe):
+	def __init__(self, db, boe):
 		BoeTexto.__init__(self, boe)
-		self.departamento = PalagraClave(DB)
+		self.departamento = PalagraClave(self.db)
 		self.en_departamento = False
-		self.origen_legislativo = PalagraClave(DB)
+		self.origen_legislativo = PalagraClave(self.db)
 		self.en_origen_legislativo = False
 		self.materias = []
 		self.en_materia = False
@@ -285,114 +282,114 @@ class BoeAParser(BoeTexto):
 	def feed(self, contenido):
 		BoeTexto.feed(self, contenido)
 		if self.departamento.id:
-			self.alertAll({'departamento':self.departamento.id,'malformado':False})
-			self.alertTitulo({'departamento':self.departamento.id,'malformado':False})
-			self.alertTexto({'departamento':self.departamento.id,'malformado':False})
-			self.alertTT({'departamento':self.departamento.id,'malformado':False})
+			self.alerta_todo({'departamento':self.departamento.id,'malformado':False})
+			self.alerta_titulo({'departamento':self.departamento.id,'malformado':False})
+			self.alerta_texto({'departamento':self.departamento.id,'malformado':False})
+			self.alerta_tt({'departamento':self.departamento.id,'malformado':False})
 
 		if self.origen_legislativo.id:
-			self.alertAll({'origen_legislativo':self.origen_legislativo.id,'malformado':False})
-			self.alertTitulo({'origen_legislativo':self.origen_legislativo.id,'malformado':False})
-			self.alertTexto({'departamento':{'$exists':False},'origen_legislativo':self.origen_legislativo.id,'materia':{'$exists':False},'alerta':{'$exists':False},'re_titulo':{'$exists':False},'malformado':False})
-			self.alertTT({'departamento':{'$exists':False},'origen_legislativo':self.origen_legislativo.id,'materia':{'$exists':False},'alerta':{'$exists':False},'malformado':False})
+			self.alerta_todo({'origen_legislativo':self.origen_legislativo.id,'malformado':False})
+			self.alerta_titulo({'origen_legislativo':self.origen_legislativo.id,'malformado':False})
+			self.alerta_texto({'departamento':{'$exists':False},'origen_legislativo':self.origen_legislativo.id,'materia':{'$exists':False},'alerta':{'$exists':False},'re_titulo':{'$exists':False},'malformado':False})
+			self.alerta_tt({'departamento':{'$exists':False},'origen_legislativo':self.origen_legislativo.id,'materia':{'$exists':False},'alerta':{'$exists':False},'malformado':False})
 			if self.departamento.id:
-				self.alertTitulo({'departamento':self.departamento.id,'origen_legislativo':self.origen_legislativo.id,'materia':{'$exists':False},'alerta':{'$exists':False},'re_texto':{'$exists':False},'malformado':False})
-				self.alertTexto({'departamento':self.departamento.id,'origen_legislativo':self.origen_legislativo.id,'materia':{'$exists':False},'alerta':{'$exists':False},'re_titulo':{'$exists':False},'malformado':False})
-				self.alertTT({'departamento':self.departamento.id,'origen_legislativo':self.origen_legislativo.id,'materia':{'$exists':False},'alerta':{'$exists':False},'malformado':False})
+				self.alerta_titulo({'departamento':self.departamento.id,'origen_legislativo':self.origen_legislativo.id,'materia':{'$exists':False},'alerta':{'$exists':False},'re_texto':{'$exists':False},'malformado':False})
+				self.alerta_texto({'departamento':self.departamento.id,'origen_legislativo':self.origen_legislativo.id,'materia':{'$exists':False},'alerta':{'$exists':False},'re_titulo':{'$exists':False},'malformado':False})
+				self.alerta_tt({'departamento':self.departamento.id,'origen_legislativo':self.origen_legislativo.id,'materia':{'$exists':False},'alerta':{'$exists':False},'malformado':False})
 
-		self.alertTexto({'malformado':False})
-		self.alertTitulo({'malformado':False})
+		self.alerta_texto({'malformado':False})
+		self.alerta_titulo({'malformado':False})
 
 		if len(self.materias)>0:
-			self.alertAll({'materia':{'$in':self.materias},'malformado':False})
-			self.alertTitulo({'materia':{'$in':self.materias},'malformado':False})
-			self.alertTexto({'materia':{'$in':self.materias},'malformado':False})
-			self.alertTT({'materia':{'$in':self.materias},'malformado':False})
+			self.alerta_todo({'materia':{'$in':self.materias},'malformado':False})
+			self.alerta_titulo({'materia':{'$in':self.materias},'malformado':False})
+			self.alerta_texto({'materia':{'$in':self.materias},'malformado':False})
+			self.alerta_tt({'materia':{'$in':self.materias},'malformado':False})
 
 			if self.origen_legislativo.id:
-				self.alertTitulo({'origen_legislativo':self.origen_legislativo.id,'materia':{'$in':self.materias},'malformado':False})
-				self.alertTexto({'origen_legislativo':self.origen_legislativo.id,'materia':{'$in':self.materias},'malformado':False})
-				self.alertTT({'origen_legislativo':self.origen_legislativo.id,'materia':{'$in':self.materias},'malformado':False})
+				self.alerta_titulo({'origen_legislativo':self.origen_legislativo.id,'materia':{'$in':self.materias},'malformado':False})
+				self.alerta_texto({'origen_legislativo':self.origen_legislativo.id,'materia':{'$in':self.materias},'malformado':False})
+				self.alerta_tt({'origen_legislativo':self.origen_legislativo.id,'materia':{'$in':self.materias},'malformado':False})
 				if self.departamento.id:
-					self.alertTitulo({'departamento':self.departamento.id,'origen_legislativo':self.origen_legislativo.id,'materia':{'$in':self.materias},'malformado':False})
-					self.alertTexto({'departamento':self.departamento.id,'origen_legislativo':self.origen_legislativo.id,'materia':{'$in':self.materias},'malformado':False})
-					self.alertTT({'departamento':self.departamento.id,'origen_legislativo':self.origen_legislativo.id,'materia':{'$in':self.materias},'malformado':False})
+					self.alerta_titulo({'departamento':self.departamento.id,'origen_legislativo':self.origen_legislativo.id,'materia':{'$in':self.materias},'malformado':False})
+					self.alerta_texto({'departamento':self.departamento.id,'origen_legislativo':self.origen_legislativo.id,'materia':{'$in':self.materias},'malformado':False})
+					self.alerta_tt({'departamento':self.departamento.id,'origen_legislativo':self.origen_legislativo.id,'materia':{'$in':self.materias},'malformado':False})
 
 		if len(self.alertas)>0:
-			self.alertAll({'alerta':{'$in':self.alertas},'malformado':False})
-			self.alertTitulo({'alerta':{'$in':self.alertas},'malformado':False})
-			self.alertTexto({'alerta':{'$in':self.alertas},'malformado':False})
-			self.alertTT({'alerta':{'$in':self.alertas},'malformado':False})
+			self.alerta_todo({'alerta':{'$in':self.alertas},'malformado':False})
+			self.alerta_titulo({'alerta':{'$in':self.alertas},'malformado':False})
+			self.alerta_texto({'alerta':{'$in':self.alertas},'malformado':False})
+			self.alerta_tt({'alerta':{'$in':self.alertas},'malformado':False})
 			if len(self.materias)>0:
-				self.alertAll({'alerta':{'$in':self.alertas},'materia':{'$in':self.materias},'malformado':False})
-				self.alertTitulo({'alerta':{'$in':self.alertas},'materia':{'$in':self.materias},'malformado':False})
-				self.alertTexto({'alerta':{'$in':self.alertas},'materia':{'$in':self.materias},'malformado':False})
-				self.alertTT({'alerta':{'$in':self.alertas},'materia':{'$in':self.materias},'malformado':False})
+				self.alerta_todo({'alerta':{'$in':self.alertas},'materia':{'$in':self.materias},'malformado':False})
+				self.alerta_titulo({'alerta':{'$in':self.alertas},'materia':{'$in':self.materias},'malformado':False})
+				self.alerta_texto({'alerta':{'$in':self.alertas},'materia':{'$in':self.materias},'malformado':False})
+				self.alerta_tt({'alerta':{'$in':self.alertas},'materia':{'$in':self.materias},'malformado':False})
 
 				if self.origen_legislativo.id:
-					self.alertTitulo({'alerta':{'$in':self.alertas},'origen_legislativo':self.origen_legislativo.id,'materia':{'$in':self.materias},'malformado':False})
-					self.alertTexto({'alerta':{'$in':self.alertas},'origen_legislativo':self.origen_legislativo.id,'materia':{'$in':self.materias},'malformado':False})
-					self.alertTT({'alerta':{'$in':self.alertas},'origen_legislativo':self.origen_legislativo.id,'materia':{'$in':self.materias},'malformado':False})
+					self.alerta_titulo({'alerta':{'$in':self.alertas},'origen_legislativo':self.origen_legislativo.id,'materia':{'$in':self.materias},'malformado':False})
+					self.alerta_texto({'alerta':{'$in':self.alertas},'origen_legislativo':self.origen_legislativo.id,'materia':{'$in':self.materias},'malformado':False})
+					self.alerta_tt({'alerta':{'$in':self.alertas},'origen_legislativo':self.origen_legislativo.id,'materia':{'$in':self.materias},'malformado':False})
 					if self.departamento.id:
-						self.alertTitulo({'alerta':{'$in':self.alertas},'departamento':self.departamento.id,'origen_legislativo':self.origen_legislativo.id,'materia':{'$in':self.materias},'malformado':False})
-						self.alertTexto({'alerta':{'$in':self.alertas},'departamento':self.departamento.id,'origen_legislativo':self.origen_legislativo.id,'materia':{'$in':self.materias},'malformado':False})
-						self.alertTT({'alerta':{'$in':self.alertas},'departamento':self.departamento.id,'origen_legislativo':self.origen_legislativo.id,'materia':{'$in':self.materias},'malformado':False})
+						self.alerta_titulo({'alerta':{'$in':self.alertas},'departamento':self.departamento.id,'origen_legislativo':self.origen_legislativo.id,'materia':{'$in':self.materias},'malformado':False})
+						self.alerta_texto({'alerta':{'$in':self.alertas},'departamento':self.departamento.id,'origen_legislativo':self.origen_legislativo.id,'materia':{'$in':self.materias},'malformado':False})
+						self.alerta_tt({'alerta':{'$in':self.alertas},'departamento':self.departamento.id,'origen_legislativo':self.origen_legislativo.id,'materia':{'$in':self.materias},'malformado':False})
 
 		if self.malformado:
-			self.alertAll({'malformado':True})
-			self.alertTitulo({'malformado':True})
-			self.alertTexto({'malformado':True})
-			self.alertTT({'malformado':True})
+			self.alerta_todo({'malformado':True})
+			self.alerta_titulo({'malformado':True})
+			self.alerta_texto({'malformado':True})
+			self.alerta_tt({'malformado':True})
 
 			if self.departamento.id:
-				self.alertAll({'departamento':self.departamento.id,'malformado':True})
-				self.alertTitulo({'departamento':self.departamento.id,'malformado':True})
-				self.alertTexto({'departamento':self.departamento.id,'malformado':True})
-				self.alertTT({'departamento':self.departamento.id,'malformado':True})
+				self.alerta_todo({'departamento':self.departamento.id,'malformado':True})
+				self.alerta_titulo({'departamento':self.departamento.id,'malformado':True})
+				self.alerta_texto({'departamento':self.departamento.id,'malformado':True})
+				self.alerta_tt({'departamento':self.departamento.id,'malformado':True})
 			if self.origen_legislativo.id:
-				self.alertAll({'origen_legislativo':self.origen_legislativo.id,'malformado':True})
-				self.alertTitulo({'origen_legislativo':self.origen_legislativo.id,'malformado':True})
-				self.alertTexto({'origen_legislativo':self.origen_legislativo.id,'malformado':True})
-				self.alertTT({'origen_legislativo':self.origen_legislativo.id,'malformado':True})
+				self.alerta_todo({'origen_legislativo':self.origen_legislativo.id,'malformado':True})
+				self.alerta_titulo({'origen_legislativo':self.origen_legislativo.id,'malformado':True})
+				self.alerta_texto({'origen_legislativo':self.origen_legislativo.id,'malformado':True})
+				self.alerta_tt({'origen_legislativo':self.origen_legislativo.id,'malformado':True})
 				if self.departamento.id:
-					self.alertTitulo({'departamento':self.departamento.id,'origen_legislativo':self.origen_legislativo.id,'malformado':True})
-					self.alertTexto({'departamento':self.departamento.id,'origen_legislativo':self.origen_legislativo.id,'malformado':True})
-					self.alertTT({'departamento':self.departamento.id,'origen_legislativo':self.origen_legislativo.id,'malformado':True})
+					self.alerta_titulo({'departamento':self.departamento.id,'origen_legislativo':self.origen_legislativo.id,'malformado':True})
+					self.alerta_texto({'departamento':self.departamento.id,'origen_legislativo':self.origen_legislativo.id,'malformado':True})
+					self.alerta_tt({'departamento':self.departamento.id,'origen_legislativo':self.origen_legislativo.id,'malformado':True})
 
 			if len(self.materias)>0:
-				self.alertAll({'materia':{'$in':self.materias},'malformado':True})
-				self.alertTitulo({'materia':{'$in':self.materias},'malformado':True})
-				self.alertTexto({'materia':{'$in':self.materias},'malformado':True})
-				self.alertTT({'materia':{'$in':self.materias},'malformado':True})
+				self.alerta_todo({'materia':{'$in':self.materias},'malformado':True})
+				self.alerta_titulo({'materia':{'$in':self.materias},'malformado':True})
+				self.alerta_texto({'materia':{'$in':self.materias},'malformado':True})
+				self.alerta_tt({'materia':{'$in':self.materias},'malformado':True})
 
 				if self.origen_legislativo.id:
-					self.alertTitulo({'origen_legislativo':self.origen_legislativo.id,'materia':{'$in':self.materias},'malformado':True})
-					self.alertTexto({'origen_legislativo':self.origen_legislativo.id,'materia':{'$in':self.materias},'malformado':True})
-					self.alertTT({'origen_legislativo':self.origen_legislativo.id,'materia':{'$in':self.materias},'malformado':True})
+					self.alerta_titulo({'origen_legislativo':self.origen_legislativo.id,'materia':{'$in':self.materias},'malformado':True})
+					self.alerta_texto({'origen_legislativo':self.origen_legislativo.id,'materia':{'$in':self.materias},'malformado':True})
+					self.alerta_tt({'origen_legislativo':self.origen_legislativo.id,'materia':{'$in':self.materias},'malformado':True})
 					if self.departamento.id:
-						self.alertTitulo({'departamento':self.departamento.id,'origen_legislativo':self.origen_legislativo.id,'materia':{'$in':self.materias},'malformado':True})
-						self.alertTexto({'departamento':self.departamento.id,'origen_legislativo':self.origen_legislativo.id,'materia':{'$in':self.materias},'malformado':True})
-						self.alertTT({'departamento':self.departamento.id,'origen_legislativo':self.origen_legislativo.id,'materia':{'$in':self.materias},'malformado':True})
+						self.alerta_titulo({'departamento':self.departamento.id,'origen_legislativo':self.origen_legislativo.id,'materia':{'$in':self.materias},'malformado':True})
+						self.alerta_texto({'departamento':self.departamento.id,'origen_legislativo':self.origen_legislativo.id,'materia':{'$in':self.materias},'malformado':True})
+						self.alerta_tt({'departamento':self.departamento.id,'origen_legislativo':self.origen_legislativo.id,'materia':{'$in':self.materias},'malformado':True})
 
 			if len(self.alertas)>0:
-				self.alertAll({'alerta':{'$in':self.alertas},'malformado':True})
-				self.alertTitulo({'alerta':{'$in':self.alertas},'malformado':True})
-				self.alertTexto({'alerta':{'$in':self.alertas},'malformado':True})
-				self.alertTT({'alerta':{'$in':self.alertas},'malformado':True})
+				self.alerta_todo({'alerta':{'$in':self.alertas},'malformado':True})
+				self.alerta_titulo({'alerta':{'$in':self.alertas},'malformado':True})
+				self.alerta_texto({'alerta':{'$in':self.alertas},'malformado':True})
+				self.alerta_tt({'alerta':{'$in':self.alertas},'malformado':True})
 				if len(self.materias)>0:
-					self.alertAll({'alerta':{'$in':self.alertas},'materia':{'$in':self.materias},'malformado':True})
-					self.alertTitulo({'alerta':{'$in':self.alertas},'materia':{'$in':self.materias},'malformado':True})
-					self.alertTexto({'alerta':{'$in':self.alertas},'materia':{'$in':self.materias},'malformado':True})
-					self.alertTT({'alerta':{'$in':self.alertas},'materia':{'$in':self.materias},'malformado':True})
+					self.alerta_todo({'alerta':{'$in':self.alertas},'materia':{'$in':self.materias},'malformado':True})
+					self.alerta_titulo({'alerta':{'$in':self.alertas},'materia':{'$in':self.materias},'malformado':True})
+					self.alerta_texto({'alerta':{'$in':self.alertas},'materia':{'$in':self.materias},'malformado':True})
+					self.alerta_tt({'alerta':{'$in':self.alertas},'materia':{'$in':self.materias},'malformado':True})
 
 					if self.origen_legislativo.id:
-						self.alertTitulo({'alerta':{'$in':self.alertas},'origen_legislativo':self.origen_legislativo.id,'materia':{'$in':self.materias},'malformado':True})
-						self.alertTexto({'alerta':{'$in':self.alertas},'origen_legislativo':self.origen_legislativo.id,'materia':{'$in':self.materias},'malformado':True})
-						self.alertTT({'alerta':{'$in':self.alertas},'origen_legislativo':self.origen_legislativo.id,'materia':{'$in':self.materias},'malformado':True})
+						self.alerta_titulo({'alerta':{'$in':self.alertas},'origen_legislativo':self.origen_legislativo.id,'materia':{'$in':self.materias},'malformado':True})
+						self.alerta_texto({'alerta':{'$in':self.alertas},'origen_legislativo':self.origen_legislativo.id,'materia':{'$in':self.materias},'malformado':True})
+						self.alerta_tt({'alerta':{'$in':self.alertas},'origen_legislativo':self.origen_legislativo.id,'materia':{'$in':self.materias},'malformado':True})
 						if self.departamento.id:
-							self.alertTitulo({'alerta':{'$in':self.alertas},'departamento':self.departamento.id,'origen_legislativo':self.origen_legislativo.id,'materia':{'$in':self.materias},'malformado':True})
-							self.alertTexto({'alerta':{'$in':self.alertas},'departamento':self.departamento.id,'origen_legislativo':self.origen_legislativo.id,'materia':{'$in':self.materias},'malformado':True})
-							self.alertTT({'alerta':{'$in':self.alertas},'departamento':self.departamento.id,'origen_legislativo':self.origen_legislativo.id,'materia':{'$in':self.materias},'malformado':True})
+							self.alerta_titulo({'alerta':{'$in':self.alertas},'departamento':self.departamento.id,'origen_legislativo':self.origen_legislativo.id,'materia':{'$in':self.materias},'malformado':True})
+							self.alerta_texto({'alerta':{'$in':self.alertas},'departamento':self.departamento.id,'origen_legislativo':self.origen_legislativo.id,'materia':{'$in':self.materias},'malformado':True})
+							self.alerta_tt({'alerta':{'$in':self.alertas},'departamento':self.departamento.id,'origen_legislativo':self.origen_legislativo.id,'materia':{'$in':self.materias},'malformado':True})
 
 	def handle_starttag(self, tag, attrs):
 		if tag == 'fecha_publicacion':
@@ -438,13 +435,13 @@ class BoeAParser(BoeTexto):
 			self.origen_legislativo['origen_legislativo'] = data.strip()
 			self.en_origen_legislativo = False
 		elif self.en_materia:
-			pc = PalagraClave(DB)
+			pc = PalagraClave(self.db)
 			pc['materia'] = data.strip()
 			if pc.id:
 				self.materias.append(pc.id)
 			self.en_materia = False
 		elif self.en_alerta:
-			pc = PalagraClave(DB)
+			pc = PalagraClave(self.db)
 			pc['alerta'] = data.strip()
 			if pc.id:
 				self.alertas.append(pc.id)
@@ -455,10 +452,10 @@ class BoeAParser(BoeTexto):
 			self.texto += data.strip()
 
 class BoeBParser(BoeTexto):
-	def __init__(self, boe):
-		BoeTexto.__init__(self, boe)
+	def __init__(self, db, boe):
+		BoeTexto.__init__(self, db, boe)
 		self.en_departamento = False
-		self.departamento = PalagraClave(DB)
+		self.departamento = PalagraClave(self.db)
 		self.malformado = False
 		self.materias_cpv_raw = ""
 		self.en_materias_cpv = False
@@ -468,47 +465,47 @@ class BoeBParser(BoeTexto):
 	def feed(self, contenido):
 		BoeTexto.feed(self, contenido)
 		if self.departamento.id:
-			self.alertAll({'departamento':self.departamento.id,'malformado':False})
-			self.alertTitulo({'departamento':self.departamento.id,'malformado':False})
-			self.alertTexto({'departamento':self.departamento.id,'malformado':False})
-			self.alertTT({'departamento':self.departamento.id,'malformado':False})
-		self.alertTitulo({'malformado':False})
-		self.alertTexto({'malformado':False})
-		self.alertTT({'malformado':False})
+			self.alerta_todo({'departamento':self.departamento.id,'malformado':False})
+			self.alerta_titulo({'departamento':self.departamento.id,'malformado':False})
+			self.alerta_texto({'departamento':self.departamento.id,'malformado':False})
+			self.alerta_tt({'departamento':self.departamento.id,'malformado':False})
+		self.alerta_titulo({'malformado':False})
+		self.alerta_texto({'malformado':False})
+		self.alerta_tt({'malformado':False})
 		if len(self.materias_cpv_raw) > 0:
 			for cpv in self.materias_cpv_raw.split('\n'):
-				pc = PalagraClave(DB)
+				pc = PalagraClave(self.db)
 				pc['materias_cpv'] = cpv
-				self.alertTitulo({'malformado':False, 'materias_cpv':pc.id})
-				self.alertTexto({'malformado':False, 'materias_cpv':pc.id})
-				self.alertTT({'malformado':False, 'materias_cpv':pc.id})
+				self.alerta_titulo({'malformado':False, 'materias_cpv':pc.id})
+				self.alerta_texto({'malformado':False, 'materias_cpv':pc.id})
+				self.alerta_tt({'malformado':False, 'materias_cpv':pc.id})
 				if self.departamento.id:
-					self.alertTitulo({'materias_cpv':pc.id, 'departamento':self.departamento.id,'malformado':False})
-					self.alertTexto({'materias_cpv':pc.id, 'departamento':self.departamento.id,'malformado':False})
-					self.alertTT({'materias_cpv':pc.id, 'departamento':self.departamento.id,'malformado':False})
+					self.alerta_titulo({'materias_cpv':pc.id, 'departamento':self.departamento.id,'malformado':False})
+					self.alerta_texto({'materias_cpv':pc.id, 'departamento':self.departamento.id,'malformado':False})
+					self.alerta_tt({'materias_cpv':pc.id, 'departamento':self.departamento.id,'malformado':False})
 
 		if self.malformado:
-			self.alertAll({'malformado':True})
+			self.alerta_todo({'malformado':True})
 			if self.departamento.id:
-				self.alertAll({'departamento':self.departamento.id,'malformado':True})
-				self.alertTitulo({'departamento':self.departamento.id,'malformado':True})
-				self.alertTexto({'departamento':self.departamento.id,'malformado':True})
-				self.alertTT({'departamento':self.departamento.id,'malformado':True})
-			self.alertTitulo({'malformado':True})
-			self.alertTexto({'malformado':True})
-			self.alertTT({'malformado':True})
+				self.alerta_todo({'departamento':self.departamento.id,'malformado':True})
+				self.alerta_titulo({'departamento':self.departamento.id,'malformado':True})
+				self.alerta_texto({'departamento':self.departamento.id,'malformado':True})
+				self.alerta_tt({'departamento':self.departamento.id,'malformado':True})
+			self.alerta_titulo({'malformado':True})
+			self.alerta_texto({'malformado':True})
+			self.alerta_tt({'malformado':True})
 
 			if len(self.materias_cpv_raw) > 0:
 				for cpv in self.materias_cpv_raw.split('\n'):
-					pc = PalagraClave(DB)
+					pc = PalagraClave(self.db)
 					pc['materias_cpv'] = cpv
-					self.alertTitulo({'malformado':True, 'materias_cpv':pc.id})
-					self.alertTexto({'malformado':True, 'materias_cpv':pc.id})
-					self.alertTT({'malformado':True, 'materias_cpv':pc.id})
+					self.alerta_titulo({'malformado':True, 'materias_cpv':pc.id})
+					self.alerta_texto({'malformado':True, 'materias_cpv':pc.id})
+					self.alerta_tt({'malformado':True, 'materias_cpv':pc.id})
 					if self.departamento.id:
-						self.alertTitulo({'materias_cpv':pc.id, 'departamento':self.departamento.id,'malformado':True})
-						self.alertTexto({'materias_cpv':pc.id, 'departamento':self.departamento.id,'malformado':True})
-						self.alertTT({'materias_cpv':pc.id, 'departamento':self.departamento.id,'malformado':True})
+						self.alerta_titulo({'materias_cpv':pc.id, 'departamento':self.departamento.id,'malformado':True})
+						self.alerta_texto({'materias_cpv':pc.id, 'departamento':self.departamento.id,'malformado':True})
+						self.alerta_tt({'materias_cpv':pc.id, 'departamento':self.departamento.id,'malformado':True})
 
 	def handle_starttag(self, tag, attrs):
 		if tag == 'fecha_publicacion':
@@ -548,25 +545,14 @@ class BoeBParser(BoeTexto):
 		elif self.en_materias_cpv:
 			self.materias_cpv_raw += data
 
-
-def boeToParser(id, rapido):
-	query = {}
+def boe2parser(id):
 	constructor = None
-
 	if id.startswith('BOE-A'):
-		query = {'tipo':'A'}
 		constructor = BoeAParser
 	elif id.startswith('BOE-B'):
-		query = {'tipo':'B'}
 		constructor = BoeBParser
 	elif id.startswith('BOE-S'):
-		query = {'$or':[{'tipo':'S'},{'tipo':'A'},{'tipo':'B'}]}
 		constructor = BoeSParser
-
 	if constructor is None:
 		return
-	if rapido:
-		reglas = Regla(DB).list(0,query,[],1)
-		if reglas['total'] == 0:
-			return
 	return constructor(id)

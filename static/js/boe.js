@@ -22,7 +22,10 @@ var ES_LANG = {
 }
 
 $(document).ready(function() {
-	if(!window.location.search || window.location.search.indexOf('login')==-1){
+	if(!window.location.search ||
+			( window.location.search.indexOf('login')==-1 &&
+			window.location.search.indexOf('oauth_token')==-1 )
+		){
 		check_alertas();
 	}
 	$(".no_implementado input").attr("disabled","disabled");

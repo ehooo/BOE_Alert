@@ -133,6 +133,8 @@ Procesa todo el BOE con identificador BOE-S-2013-1
 `$ python boe_parser.py --boe BOE-S-2013-1`
 
 # TODO
+* Normalizar nombre
+* Gestor de trabajo para integracion con cloud API
 * Mejora de Pagina Acerca
 * Insertar apartados para cumplir "Ley de Cookies"
 * Mejorar documentacion sobre configuracion de Reglas

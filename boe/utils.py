@@ -1,29 +1,30 @@
 '''
 Funcioles utiles miscelaneas
 '''
+import os, ConfigParser, logging, hashlib, base64
+import httplib, urllib2, urlparse, socket
 try:
 	#Para Linux
 	from pymongo.bson import ObjectId
 except:
 	#Para Windows
 	from bson.objectid import ObjectId
+
 try:
 	#https://github.com/dlitz/pycrypto
 	from Crypto.Random import random
 	from Crypto.Cipher import AES
-
+except:
+	import random
+try:
 	#https://github.com/boppreh/simplecrypto
 	from simplecrypto import encrypt, decrypt
 
 	#https://github.com/andrewcooke/simple-crypt
 	from simplecrypt import encrypt, decrypt
 except:
-	import random
+	pass
 
-import os, ConfigParser, logging, hashlib, base64
-import httplib, urllib2, urlparse, socket
-
-FICHERO_CONFIGURACION = os.path.dirname(__file__) + "/../boe.conf"
 def cargar_conf(fichero):
 	conf = ConfigParser.ConfigParser()
 	conf.readfp(open(fichero))
@@ -104,9 +105,8 @@ def get_attr(attrs, key):
 		if k == key:
 			return v
 	return None
-
 from HTMLParser import HTMLParser
-class HTML_Plain(HTMLParser):
+class HTML2Plain(HTMLParser):
 	def __init__(self):
 		HTMLParser.__init__(self)
 		self.plain = ""
@@ -122,7 +122,7 @@ class HTML_Plain(HTMLParser):
 		if tag == 'a' and self.href is not None:
 			self.plain += "](%s)"%self.href
 def html2plain(html):
-	parser = HTML_Plain()
+	parser = HTML2Plain()
 	parser.feed(html)
 	return parser.plain
 
@@ -192,7 +192,6 @@ def proxy_wget(url, cabezera={}):
 			estado = er.errno
 	finally:
 		return (contenido, cabezeras, estado)
-
 def wget_url(url, proxy, cabezera={}, tipo="GET", post=None):
 	if proxy:
 		return proxy_wget(url, cabezera)

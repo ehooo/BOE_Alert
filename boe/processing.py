@@ -1,7 +1,7 @@
+from __future__ import absolute_import
 
-from parser import BoeSParser, BoeAParser, BoeBParser, boeToParser
-from utils import cargar_conf, wget_url, FICHERO_CONFIGURACION, html2plain
-from db import DBConnector, Alertas, Usuario
+from .parser import BoeSParser, BoeAParser, BoeBParser, boe2parser
+from .utils import cargar_conf, wget_url, FICHERO_CONFIGURACION, html2plain
 
 from email.mime.multipart import MIMEMultipart
 from xml.parsers.expat import ExpatError
@@ -24,8 +24,7 @@ def every_monday_morning():
     print("This is run every Monday morning at 7:30")
 '''
 
-
-@task
+@task(name="envia_alerta",exchange="envia_alerta")
 def envia_alerta(alerta_id):
 	DB = DBConnector(CONF)
 	alerta = Alertas(DB)
@@ -48,14 +47,14 @@ def envia_alerta(alerta_id):
 		plain = html2plain(html)
 		subject = "Alerta sobre %s"%alerta['boe']
 		if CONF.getboolean("celery", "activo"):
-			envia_email.apply_async(kwargs={'correo':usuario['email'],"subject":subject,"plain":plain,'html':html})
+			task_id = envia_email.apply_async(kwargs={'correo':usuario['email'],"subject":subject,"plain":plain,'html':html})
 		else:
 			envia_email(usuario['email'], subject, plain, html)
 	if usuario['alert_twitter'] and usuario['twitter']:
 		url = "http://boe.es/diario_boe/txt.php?id=%s"%(alerta['boe'])
 		contenido = "Datos de interes en %s (%s) %s"%(alerta['boe'], len(alerta['alias']), url)
 		if CONF.getboolean("celery", "activo"):
-			envia_dm.apply_async(kwargs={'usuario':usuario['twitter'],"contenido":contenido})
+			task_id = envia_dm.apply_async(kwargs={'usuario':usuario['twitter'],"contenido":contenido})
 		else:
 			envia_dm(usuario['twitter'], contenido)
 	usuario.clean_alertas()
@@ -108,7 +107,7 @@ def procesa_boe(boe_id, rapido):
 		#TODO Notificar como malformado?
 		logging.error("Error %s al acceder al BOE: %s"%(estado, boe_id))
 		return
-	boe = boeToParser(boe_id, rapido)
+	boe = boe2parser(boe_id, rapido)
 	if boe is None:
 		logging.error("Error BOE %s no procesable" % boe_id)
 		return
@@ -127,7 +126,7 @@ def procesa_boe(boe_id, rapido):
 		logging.info("Hoy hay un total de %s BOES para procesar"%(len(boe.boes)))
 		for boeid in boe.boes:
 			if CONF.getboolean("celery", "activo"):
-				procesa_boe.apply_async(kwargs={'boe_id':boeid,'rapido':rapido})
+				task_id = procesa_boe.apply_async(kwargs={'boe_id':boeid,'rapido':rapido})
 			else:
 				procesa_boe(boeid, rapido)
 

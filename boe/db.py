@@ -1,7 +1,13 @@
-from utils import get_mongo_uri
+from __future__ import absolute_import
+from .utils import get_mongo_uri
 
 from pymongo import Connection
 import logging
+
+try:
+	from pymongo.bson import ObjectId
+except:
+	from bson.objectid import ObjectId
 
 class DBConnector():
 	def __init__(self, conf):
@@ -19,13 +25,13 @@ class DBObject(object):
 		self.to_save_data = {}
 	def __setitem__(self, key, value):
 		if key in ["_id", "id"]:
-			res = self.getConexion().find_one({"_id":value}, fields=["_id"])
+			res = self.get_conexion().find_one({"_id":value}, fields=["_id"])
 			if res and "_id" in res:
 				self.id = res["_id"]
 			else:
 				logging.debug("ID Desconocido %s: %s"%(self.__class__.__name__, value))
 		elif self.id:
-			self.getConexion().update({"_id":self.id}, {'$set':{key:value}})
+			self.get_conexion().update({"_id":self.id}, {'$set':{key:value}})
 		else:
 			self.to_save_data[key] = value
 	def __getitem__(self, key):
@@ -34,7 +40,7 @@ class DBObject(object):
 			ret = self.id
 		elif self.id:
 			try:
-				ret = self.getConexion().find_one({"_id":self.id}, fields=[key])
+				ret = self.get_conexion().find_one({"_id":self.id}, fields=[key])
 				if ret and key in ret:
 					ret = ret[key]
 				else:
@@ -47,20 +53,20 @@ class DBObject(object):
 	def __contains__(self, item):
 		ret = False
 		if self.id:
-			exist = self.getConexion().find_one({"_id":self.id}, fields=[item])
+			exist = self.get_conexion().find_one({"_id":self.id}, fields=[item])
 			if exist is not None and item in exist:
 				ret = True
 		elif item in self.to_save_data:
 			ret = True
 		return ret
-	def getConexion(self):
+	def get_conexion(self):
 		return self.db[self.__class__.__name__]
 	def save(self, force=False):
 		if len(self.to_save_data)>0:
 			if self.id:
-				self.getConexion().update({"_id":self.id}, {'$set':self.to_save_data})
+				self.get_conexion().update({"_id":self.id}, {'$set':self.to_save_data})
 			else:
-				self.id = self.getConexion().insert(self.to_save_data)
+				self.id = self.get_conexion().insert(self.to_save_data)
 			self.to_save_data = {}
 	def list(self, page=0, filter={}, sort=[], count=10):
 		ret = {
@@ -68,7 +74,7 @@ class DBObject(object):
 			'total':0,
 			'data':[]
 		}
-		res = self.getConexion().find(filter, sort=sort, fields=["_id"])
+		res = self.get_conexion().find(filter, sort=sort, fields=["_id"])
 		ret['total'] = res.count()
 		items = res.skip(page*count).limit(count)
 		for i in items:
@@ -79,16 +85,23 @@ class DBObject(object):
 		return ret
 	def remove(self):
 		if self.id:
-			self.getConexion().remove({'_id':self.id})
-
+			self.get_conexion().remove({'_id':self.id})
+	def exist(self, id):
+		if isinstance(id, ObjectId):
+			return self.get_conexion().find_one({"_id":id}, fields=["_id"])
+		else:
+			try:
+				return self.get_conexion().find_one({"_id":ObjectId(id)}, fields=["_id"])
+			except:
+				pass
 from datetime import timedelta
 class Usuario(DBObject):
 	def remove(self):
 		if self.id:
-			Alertas(self._orig_conn).getConexion().remove({'usuario':self.id})
-			Regla(self._orig_conn).getConexion().remove({'usuario':self.id})
+			Alertas(self._orig_conn).get_conexion().remove({'usuario':self.id})
+			Regla(self._orig_conn).get_conexion().remove({'usuario':self.id})
 		DBObject.remove(self)
-	def clean_alertas(self):
+	def clean(self):
 		if self.id:
 			alertas = Alertas(self._orig_conn)
 			ultima = alertas.list(0, {'usuario':self.id}, [('fecha',-1)], 1)
@@ -97,19 +110,19 @@ class Usuario(DBObject):
 				dias = 5
 			if len(ultima['data']) > 0:
 				borrar = ultima['data'][0]['fecha'] - timedelta(dias)
-				alertas.getConexion().remove({'usuario':self.id, 'fecha':{'$lt':borrar}})
+				alertas.get_conexion().remove({'usuario':self.id, 'fecha':{'$lt':borrar}})
 
 class Alertas(DBObject):
 	def add(self, regla, boe, fecha):
 		assert regla is None or isinstance(regla, Regla) or regla.id is None
-		res = self.getConexion().find_one({'usuario':regla['usuario'],'boe':boe}, fields=["_id"])
+		res = self.get_conexion().find_one({'usuario':regla['usuario'],'boe':boe}, fields=["_id"])
 		push_id = None
 		if res and "_id" in res:
 			push_id = res["_id"]
 		else:
-			push_id = self.getConexion().insert({'usuario':regla['usuario'], 'boe':boe, 'fecha':fecha})
+			push_id = self.get_conexion().insert({'usuario':regla['usuario'], 'boe':boe, 'fecha':fecha})
 		if push_id:
-			self.getConexion().update({ '_id':push_id, 'alias':{"$ne":regla['alias']}}, {"$push":{'alias':regla['alias']}} )
+			self.get_conexion().update({ '_id':push_id, 'alias':{"$ne":regla['alias']}}, {"$push":{'alias':regla['alias']}} )
 			ret = self.__new__(self.__class__)
 			ret.__init__(self._orig_conn)
 			ret.id = push_id
@@ -125,7 +138,7 @@ class PalagraClave(DBObject):
 			if value.strip() == "":
 				self.id =  None
 				return
-			res = self.getConexion().find_one({key:value}, fields=["_id"])
+			res = self.get_conexion().find_one({key:value}, fields=["_id"])
 			if res and "_id" in res:
 				self.id = res["_id"]
 			else:
@@ -134,12 +147,12 @@ class PalagraClave(DBObject):
 				self.save()
 		else:
 			DBObject.__setitem__(self, key, value)
-	def getTipo(self):
+	def get_tipo(self):
 		for key in self.psc:
 			if key in self:
 				return key
 	def __str__(self):
-		key = self.getTipo()
+		key = self.get_tipo()
 		if key is not None:
 			return self[key].encode('utf-8','replace')
 		return ""
@@ -225,3 +238,10 @@ class Regla(DBObject):
 			ret['re_texto'] = re_texto
 		ret.save()
 		return ret
+
+class BoeTask(DBObject):
+	def exist(self, id):
+		if not isinstance(id, ObjectId):
+			return self.get_conexion().find_one({"task":id}, fields=["_id"])
+		else:
+			return DBObject(self, id)

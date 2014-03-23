@@ -21,15 +21,6 @@ DB = DBConnector(CONF)
 import web
 from twython import Twython
 
-def twitter_url():
-	if CONF.has_section("twitter"):
-		twitter = Twython(CONF.get("twitter", "consumer_key"), CONF.get("twitter", "consumer_secret"))
-		auth = twitter.get_authentication_tokens(callback_url="http://%s/usuario"%(web.ctx.host))
-		SESSION.twitter_token = auth['oauth_token']
-		SESSION.twitter_token_secret = auth['oauth_token_secret']
-		return auth['auth_url']
-	return ""
-
 if CONF.has_option("web", "cookie_name"):
 	web.config.session_parameters['cookie_name'] = CONF.get("web", "cookie_name")
 if CONF.has_option("web", "cookie_domain"):
@@ -57,7 +48,11 @@ URLS = (
 
 APP = web.application(URLS, globals())
 
-SESSION = web.session.Session(APP, web.session.DiskStore(CONF.get("web", "cookie_dir")), initializer={'login': None, 'tcode':None, 'cifrado':None})
+SESSION = web.session.Session(
+	APP,
+	web.session.DiskStore(CONF.get("web", "cookie_dir")),
+	initializer={'login': None, 'tcode':None, 'cifrado':None, 'twitter_token_secret':None, 'twitter_token':None}
+)
 
 def genClave(forcegen=False):
 	clave = gen_random()
@@ -71,6 +66,15 @@ def genClave(forcegen=False):
 def get_tcode():
 	SESSION.tcode = gen_random()
 	return SESSION.tcode
+
+def twitter_url():
+	if CONF.has_section("twitter"):
+		twitter = Twython(CONF.get("twitter", "consumer_key"), CONF.get("twitter", "consumer_secret"))
+		auth = twitter.get_authentication_tokens(callback_url="http://%s/usuario"%(web.ctx.host))
+		SESSION.twitter_token = auth['oauth_token']
+		SESSION.twitter_token_secret = auth['oauth_token_secret']
+		return auth['auth_url']
+	return ""
 
 GLOBALS = {'clave_cifrado':genClave, 'twitter_url':twitter_url, 'get_tcode':get_tcode}
 RENDER = web.template.render(CONF.get('web','tema'),globals=GLOBALS)
@@ -132,6 +136,7 @@ class DefaultWeb:
 			self.usuario = res['data'][0]
 		else:
 			SESSION.login = None
+			raise web.seeother('/usuario?login')
 	def do_auth(self):
 		i = web.input()
 		email = i.get('email')
@@ -182,34 +187,39 @@ class Estatico(DefaultWeb):
 
 class DatosUsuario(DefaultWeb):
 	def do_twitter_auth(self, oauth_verifier):
-		if CONF.has_section("twitter") and 'twitter_token' in SESSION and 'twitter_token_secret' in SESSION:
-			twitter = Twython(CONF.get("twitter", "consumer_key"), CONF.get("twitter", "consumer_secret"), SESSION.twitter_token, SESSION.twitter_token_secret)
-			final_step = twitter.get_authorized_tokens(oauth_verifier)
-			if 'oauth_token_secret' in final_step and 'oauth_token' in final_step:
-				SESSION.twitter_token = final_step['oauth_token']
-				SESSION.twitter_token_secret = final_step['oauth_token_secret']
+		print "------->",  oauth_verifier
+		if not CONF.has_section("twitter"):
+			return False
+		print "------->", dir(SESSION)
+		if not ('twitter_token' in SESSION and 'twitter_token_secret' in SESSION) or SESSION.twitter_token is None or SESSION.twitter_token_secret is None:
+			return False
+		twitter = Twython(CONF.get("twitter", "consumer_key"), CONF.get("twitter", "consumer_secret"), SESSION.twitter_token, SESSION.twitter_token_secret)
+		final_step = twitter.get_authorized_tokens(oauth_verifier)
+		if 'oauth_token_secret' in final_step and 'oauth_token' in final_step:
+			SESSION.twitter_token = final_step['oauth_token']
+			SESSION.twitter_token_secret = final_step['oauth_token_secret']
 
-				twitter = Twython(CONF.get("twitter", "consumer_key"), CONF.get("twitter", "consumer_secret"), SESSION.twitter_token, SESSION.twitter_token_secret)
-				response = twitter.verify_credentials()
-				if 'id' in response and 'screen_name' in response:
-					usuario = Usuario(DB)
-					res = usuario.list(0,{'twitter_id':response["id"]},[],1)
+			twitter = Twython(CONF.get("twitter", "consumer_key"), CONF.get("twitter", "consumer_secret"), SESSION.twitter_token, SESSION.twitter_token_secret)
+			response = twitter.verify_credentials()
+			if 'id' in response and 'screen_name' in response:
+				usuario = Usuario(DB)
+				res = usuario.list(0,{'twitter_id':response["id"]},[],1)
+				if res['total'] > 0:
+					usuario = res['data'][0]
+				elif 'login' in SESSION and SESSION.login:
+					res = usuario.list(0,{'_id':SESSION.login},[],1)
 					if res['total'] > 0:
 						usuario = res['data'][0]
-					elif 'login' in SESSION and SESSION.login:
-						res = usuario.list(0,{'_id':SESSION.login},[],1)
-						if res['total'] > 0:
-							usuario = res['data'][0]
-							usuario['twitter'] = response["screen_name"]
-							usuario['twitter_id'] = response["id"]
-					else:
 						usuario['twitter'] = response["screen_name"]
 						usuario['twitter_id'] = response["id"]
-						usuario['cifrado'] = gen_random()
-						usuario.save()
+				else:
+					usuario['twitter'] = response["screen_name"]
+					usuario['twitter_id'] = response["id"]
+					usuario['cifrado'] = gen_random()
+					usuario.save()
 
-					SESSION.login = usuario.id
-					raise web.seeother('/usuario')
+				SESSION.login = usuario.id
+				raise web.seeother('/usuario')
 	def GET(self, errores=None):
 		DefaultWeb.GET(self)
 		web.header('Content-Type', 'text/html')
@@ -225,7 +235,7 @@ class DatosUsuario(DefaultWeb):
 			return RENDER_BASE.login(None)
 		elif i.has_key('oauth_verifier'):
 			self.do_twitter_auth(i.get('oauth_verifier'))
-			return RENDER_BASE.login(['Error con Twitter'])
+			return RENDER_BASE.login('Error con Twitter')
 		elif i.has_key('validar'):
 			email_key = i.get('key')
 			usuario = Usuario(DB)
@@ -348,7 +358,7 @@ class AdminReglas(DefaultWeb):
 		boeb = BOE_B()
 		return RENDER_BASE.reglas(None, rapidas.GET(), boes.GET(), boea.GET(), boeb.GET())
 	def POST(self):
-		DefaultWeb.GET(self)
+		DefaultWeb.POST(self)
 		i = web.input()
 		if i.has_key('listado'):
 			lista = i.get('listado')

@@ -46,7 +46,7 @@ if __name__ == "__main__":
 	if args.boe is not None:
 		if CONF.getboolean("celery", "activo"):
 			logging.debug("Analizando el BOE: %s con Celery"%(args.boe))
-			procesa_boe.apply_async(kwargs={'rapido':args.rapido, 'boe_id':args.boe})
+			task_id = procesa_boe.apply_async(kwargs={'rapido':args.rapido, 'boe_id':args.boe})
 		else:
 			logging.debug("Analizando el BOE: %s"%(args.boe))
 			procesa_boe(args.boe, args.rapido)
@@ -65,7 +65,7 @@ if __name__ == "__main__":
 				boe_parser.feed(contenido.decode('utf-8', 'replace'))
 				if boe_parser.boe:
 					if CONF.getboolean("celery", "activo"):
-						procesa_boe.apply_async(kwargs={'rapido':args.rapido, 'boe_id':boe_parser.boe})
+						task_id = procesa_boe.apply_async(kwargs={'rapido':args.rapido, 'boe_id':boe_parser.boe})
 					else:
 						procesa_boe(boe_parser.boe, args.rapido)
 
