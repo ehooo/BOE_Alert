@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% load url from future %}
+{% load i18n %}
+
+{% block content_title %}{% trans "login" %}{% endblock %}
+{% block content %}
+<a id="twitter" href="{% url 'social:begin' 'twitter' %}">Twitter</a> <br />
+<form action="{% url 'social:complete' "email" %}" method="post">
+  {% csrf_token %}
+  <label for="email">{% trans "Email address" %}:</label>
+  <input id="email" type="email" name="email" value="" />
+
+  <label for="password">{% trans "Password" %}:</label>
+  <input id="password" type="password" name="password" value="" />
+  <input type="hidden" name="next" value="{{ next }}" />
+
+  <br />
+  <button>{% trans "Signup" %}</button>
+</form>
+{% endblock %}

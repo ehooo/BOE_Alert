@@ -1,9 +1,9 @@
-$def with (leeme)
-$var seccion: acerca
-<div class="panel panel-primary">
-<div class="panel-heading"><h1 class="panel-title">LEEME</h1></div>
-<div class="panel-body">
-<pre>
-$:leeme
-</pre>
-</div>
+{% extends "base.html" %}
+{% load url from future %}
+{% load i18n %}
+
+{% block content %}
+<h2>Acerda de:</h2>
+<p>Sistema de procesado y alertar para el <a href="http://www.boe.es/">BOE (Boletin Oficial del Estado)</a>.</p>
+<p><a href="https://github.com/ehooo/BOE_Alert">{% trans 'Disponible en Github' %}</a></p>
+{% endblock %}

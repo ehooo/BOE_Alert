@@ -1,13 +1,9 @@
-﻿$def with (errores, tablaRapida, tablaS, tablaA, tablaB)
-$var seccion: reglas
+{% extends 'base.html' %}
+{% load url from future %}
+{% load i18n %}
 
-$if errores is not None:
-	$if len(errores) > 0:
-		$for error in errores:
-			<div class="alert alert-danger">$error</div>
-	$else:
-		<div class="alert alert-success">Datos guardados</div>
-
+{% block content_title %}{% trans 'reglas' %}{% endblock %}
+{% block content %}
 <div class="panel panel-primary" id="admin_reglas">
 <div class="panel-heading">
 <ul class="nav nav-tabs">
@@ -18,16 +14,76 @@ $if errores is not None:
 </div>
 
 <div class="tab-content">
-<div class="tab-pane active" id="basico">
-$:tablaRapida
+<div class="tab-pane {{cls_basico}}" id="basico">
+<form id="regla_rapida" method="POST" role="form" action="{% url 'boe:add_regla' 'rapida' %}" >
+{% csrf_token %}
+<fieldset class="panel panel-info">
+<div class="panel-heading"><span class="glyphicon"></span>
+<legend class="panel-title">{% trans 'regla rapida' %}:</legend></div>
+{{ rapida_form.alias.errors }}
+<label>{{ rapida_form.alias.label }}
+	{{ rapida_form.alias }}
+</label>
+{{ rapida_form.expresion.errors }}
+<label>{{ rapida_form.expresion.label }}
+	{{ rapida_form.expresion }}
+</label>
+{{ rapida_form.malformado.errors }}
+<label>{{ rapida_form.malformado.label }}
+	{{ rapida_form.malformado }}
+</label>
+<input type="submit" value="{% trans 'guardar' %}" class="btn btn-primary"/>
+</fieldset>
+</form>
+{% block lista_reglas %}
+<div class="panel panel-info">
+<div class="panel-heading"><span class="panel-title">{% trans 'Lista de reglas' %}:</span></div>
+<ul>
+{% for r in reglas %}
+	<li><a href="{% url 'boe:details_regla' r.pk %}">{{ r.alias }}</a><span class="badge">{{r.s.count}}/{{r.a.count}}/{{r.b.count}}</span></li>
+{% endfor %}
+</ul>
 </div>
-<div class="tab-pane" id="avanzado">
-$:tablaS
-$:tablaA
-$:tablaB
+{% endblock %}
+</div>
+<div class="tab-pane {{cls_avanzado}}" id="avanzado">
+<!-- TODO INSERTAR FORMULARIOS -->
+
+<form id="regla_rapida" method="POST" role="form" action="{% url 'boe:add_regla' 'S' %}" >
+{% csrf_token %}
+<fieldset class="panel panel-info">
+<div class="panel-heading"><span class="glyphicon"></span>
+<legend class="panel-title">{% trans 'regla S' %}:</legend></div>
+{{ regla_form }}
+{{ s_form }}
+</fieldset>
+<input type="submit" value="{% trans 'guardar' %}" class="btn btn-primary"/>
+</form>
+<form id="regla_rapida" method="POST" role="form" action="{% url 'boe:add_regla' 'A' %}" >
+{% csrf_token %}
+<fieldset class="panel panel-info">
+<div class="panel-heading"><span class="glyphicon"></span>
+<legend class="panel-title">{% trans 'regla A' %}:</legend></div>
+{{ regla_form }}
+{{ a_form }}
+</fieldset>
+<input type="submit" value="{% trans 'guardar' %}" class="btn btn-primary"/>
+</form>
+<form id="regla_rapida" method="POST" role="form" action="{% url 'boe:add_regla' 'B' %}" >
+{% csrf_token %}
+<fieldset class="panel panel-info">
+<div class="panel-heading"><span class="glyphicon"></span>
+<legend class="panel-title">{% trans 'regla B' %}:</legend></div>
+{{ regla_form }}
+{{ b_form }}
+</fieldset>
+<input type="submit" value="{% trans 'guardar' %}" class="btn btn-primary"/>
+</form>
+
 </div>
 <div class="tab-pane" id="ayuda">
 <div class="panel panel-info">
+{% block ayuda_content %}
 <div class="panel-heading">Sobre el funcionamiento de las Reglas</div>
 <p>En el panel de busqueda avanzada podemos ver tres tipo de "BOE"s.<br/>
 Cada uno de ellos contiene un formato diferente y por tanto las alertas se puede configurar con distintas opciones.</p>
@@ -63,8 +119,11 @@ Sobre este formato existen las siguientes opciones:
 <li><b>texto:</b> <a href="http://docs.python.org/2/library/re.html#regular-expression-syntax">Expresion regular</a> usada para buscar en el texto del BOE.</li>
 </ul>
 </p>
+{% endblock %}
 </div>
 </div>
 
 </div>
 </div>
+
+{% endblock %}

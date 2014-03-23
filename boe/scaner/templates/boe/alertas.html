@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% load url from future %}
+{% load i18n %}
+
+{% block content_title %}{% trans 'alertas' %}{% endblock %}
+
+{% block content %}
+<div class="panel panel-danger">
+<div class="panel-heading">{% trans 'Ultimas Alertas del BOE' %}</div>
+<div class="panel-body">
+{% if user.alertas.count <= 0 %}
+<p>{% trans 'No hay Alertas' %}</p>
+{% else %}
+<table cellpadding="0" cellspacing="0" border="0" class="display" id="alertas_boe">
+<thead>
+<tr>
+	<th>BOE</th>
+	<th>{% trans 'Fecha' %}</th>
+	<th>{% trans 'Alias' %}</th>
+</tr>
+</thead>
+<tbody>
+{% for alerta in user.alertas.all %}
+<tr>
+	<td>{{ alerta.boe.boe }}
+		<a class='pdf' href="http://boe.es/boe/dias/{{alerta.boe.fecha|date:'Y/m/d'}}/pdfs/{{ alerta.boe.boe }}.pdf">pdf</a>
+		{% if 'BOE-S' in alerta.boe.boe %}
+		<a class='html' href="http://boe.es/boe/dias/{{alerta.boe.fecha|date:'Y/m/d'}}/index.php?s=c">html</a>
+		{% else %}
+		<a class='html' href="http://boe.es/diario_boe/txt.php?id={{ alerta.boe.boe }}">html</a>
+		{% endif %}
+		<a class='xml' href="http://boe.es/diario_boe/xml.php?id={{ alerta.boe.boe }}">xml</a>
+		<a class='epub' href="http://boe.es/diario_boe/epub.php?id={{ alerta.boe.boe }}">epub</a>
+	</td>
+	<td>{{ alerta.boe.fecha }}</td>
+	<td>{{ alerta.regla.alias }}</td>
+</tr>
+{% endfor %}
+</tbody>
+</table>
+{% endif %}
+</div>
+</div>
+
+{% endblock %}

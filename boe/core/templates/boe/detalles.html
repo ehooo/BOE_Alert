@@ -1,0 +1,97 @@
+{% extends 'base.html' %}
+{% load url from future %}
+{% load i18n %}
+
+{% block content_title %}{% trans 'detalles' %}{% endblock %}
+{% block content %}
+<form id="datos_usuario" method="POST" role="form" action="" >
+{% csrf_token %}
+<div class="panel panel-primary">
+<div class="panel-heading"><h1 class="panel-title">{% trans 'Datos de la regla' %} {{ regla.alias }}</h1></div>
+<div class="panel-body">
+
+<fieldset class="panel panel-info">
+<div class="panel-heading"><legend class="panel-title">{% trans 'Reglas S' %}:</legend></div>
+<table cellpadding="0" cellspacing="0" border="0" class="display">
+<thead>
+<tr>
+	<th>{% trans 'titulo' %}</th>
+	<th>{% trans 'seccion' %}</th>
+	<th>{% trans 'departamento' %}</th>
+	<th>{% trans 'epigrafe' %}</th>
+	<th></th>
+</tr>
+</thead>
+<tbody>
+{% for rs in regla.s.all %}
+<tr>
+	<td>{%if rs.re_titulo %} {{rs.re_titulo}} {% endif %}</td>
+	<td>{%if rs.seccion %} {{rs.seccion}} {% endif %}</td>
+	<td>{%if rs.departamento %} {{rs.departamento}} {% endif %}</td>
+	<td>{%if rs.epigrafe %} {{rs.epigrafe}} {% endif %}</td>
+	<td><input value="{{rs.id}}" type="checkbox" name="borrars[]"/></td>
+</tr>
+{% endfor %}
+</tbody>
+</table>
+</fieldset>
+
+<fieldset class="panel panel-info">
+<div class="panel-heading"><legend class="panel-title">{% trans 'Reglas A' %}:</legend></div>
+<table cellpadding="0" cellspacing="0" border="0" class="display">
+<thead>
+<tr>
+	<th>{% trans 'titulo' %}</th>
+	<th>{% trans 'texto' %}</th>
+	<th>{% trans 'departamento' %}</th>
+	<th>{% trans 'origen legislativo' %}</th>
+	<th>{% trans 'materias' %}</th>
+	<th>{% trans 'alertas' %}</th>
+	<th></th>
+</tr>
+</thead>
+<tbody>
+{% for ra in regla.a.all %}
+<tr>
+	<td>{%if ra.re_titulo %} {{ra.re_titulo}} {% endif %}</td>
+	<td>{%if ra.re_texto %} {{ra.re_texto}} {% endif %}</td>
+	<td>{%if ra.departamento %} {{ra.departamento}} {% endif %}</td>
+	<td>{%if ra.origen_legislativo %} {{ra.origen_legislativo}} {% endif %}</td>
+	<td>{%if ra.materias %} {{ra.materias}} {% endif %}</td>
+	<td>{%if ra.alertas %} {{ra.alertas}} {% endif %}</td>
+	<td><input value="{{ra.id}}" type="checkbox" name="borrara[]"/></td>
+</tr>
+{% endfor %}
+</tbody>
+</table>
+</fieldset>
+
+<fieldset class="panel panel-info">
+<div class="panel-heading"><legend class="panel-title">{% trans 'Reglas B' %}:</legend></div>
+<table cellpadding="0" cellspacing="0" border="0" class="display" id="$table_id">
+<thead>
+<tr>
+	<th>{% trans 'titulo' %}</th>
+	<th>{% trans 'texto' %}</th>
+	<th>{% trans 'departamento' %}</th>
+	<th>{% trans 'materias cpv' %}</th>
+	<th></th>
+</tr>
+</thead>
+<tbody>
+{% for rb in regla.b.all %}
+<tr>
+	<td>{%if rb.re_titulo %} {{rb.re_titulo}} {% endif %}</td>
+	<td>{%if rb.re_texto %} {{rb.re_texto}} {% endif %}</td>
+	<td>{%if rb.departamento %} {{rb.departamento}} {% endif %}</td>
+	<td>{%if rb.materias_cpv %} {{rb.materias_cpv}} {% endif %}</td>
+	<td><input value="{{rb.id}}" type="checkbox" name="borrarb[]"/></td>
+</tr>
+{% endfor %}
+</tbody>
+</table>
+</fieldset>
+
+<input type="submit" value="{% trans 'Borrar marcados' %}" class="btn btn-primary"/>
+</form>
+{% endblock %}
