@@ -1,20 +1,19 @@
 from __future__ import absolute_import
 from django.conf import settings
-
-from boe.scaner.parser import BoeSParser
-from boe.scaner.parser import boe2parser
-from boe.scaner.utils import wget_url
-from boe.scaner.utils import html2plain
-from boe.scaner.models import Boe
-from boe.scaner.models import AlertaUsuario
-from boe.core.models import Regla
-
+from xml.parsers.expat import ExpatError
 from celery import task
 from datetime import datetime
 import httplib
 import logging
 
-from xml.parsers.expat import ExpatError
+from boe.scaner.parser import BoeSParser
+from boe.scaner.parser import boe2parser
+from boe.scaner.parser import BoeDiaParser
+from boe.scaner.utils import wget_url
+from boe.scaner.utils import html2plain
+from boe.scaner.models import Boe
+from boe.scaner.models import AlertaUsuario
+from boe.core.models import Regla
 
 @task
 def procesa(boe_id):
@@ -53,7 +52,6 @@ def procesa(boe_id):
 		for boeid in boeparser.boes:
 			procesa_boe(boeid)
 		#'''
-
 @task
 def cron_procesa():
     hoy = date.today()
@@ -116,4 +114,4 @@ def procesa_boe(boe_id):
 	celerytask = procesa.apply_async(kwargs={'boe_id':boe_id})
 	boe_db.celery_task = celerytask.task_id
 	boe_db.save()
-	return celerytask 
+	return celerytask

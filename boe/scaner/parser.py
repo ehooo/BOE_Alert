@@ -1,5 +1,5 @@
 '''
-
+Procesado de ficheros HTML/XML de la web del BOE
 '''
 
 from django.contrib.auth.models import User
@@ -29,7 +29,6 @@ import re
 from xml.parsers.expat import ParserCreate, ExpatError
 from HTMLParser import HTMLParser
 from datetime import datetime
-from symbol import except_clause
 
 FORMATO_FECHA = "%Y/%m/%d"
 

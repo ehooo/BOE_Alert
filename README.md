@@ -20,12 +20,12 @@ Sistema de procesado y alertar para el BOE (Boletin Oficial del Estado).
 
 # Instalar
 * [python](http://www.python.org/download/): `# apt-get install python`
-* [easy\_install](https://pypi.python.org/pypi/setuptools): `# apt-get install python-pip`
+* [pip](https://pypi.python.org/pypi/setuptools): `# apt-get install python-pip`
 * [django](https://www.djangoproject.com): `# pip install Django==1.6.1`
 * [Python Social Auth](https://github.com/omab/python-social-auth): `# pip install python-social-auth`
-* [Celery](http://www.celeryproject.org/install/): `# easy_install Celery`
+* [Celery](http://www.celeryproject.org/install/): `# pip install Celery`
+* [DjCelery](http://celery.readthedocs.org/en/latest/django/first-steps-with-django.html#using-the-django-orm-cache-as-a-result-backend): `# pip install django-celery`
 * [Twython](https://twython.readthedocs.org/en/latest/usage/install.html): `# pip install twython`
-
 
 # WebUI Powered by:
 * [Bootstrap](http://getbootstrap.com/getting-started/)
@@ -38,7 +38,7 @@ Antes de insertar reglas en el sistema es recomendame nutrilo con los datos como
 "seccion","departamento","epigrafe", ... que nos permitiran generar alertas genericas sobre apartados contretos,
 cuanto mayor sea el numero de BOEs procesados mayor numero de opciones, si aparecen nuevas se van insertando con cada analisis.
 <pre>
-$ python manager.py boe_start 2013/01/01
+$ python manager.py boescan 2014/01/01 2014/01/31
 $ python manager.py celeryd
 $ python manager.py runserver
 </pre>
@@ -50,7 +50,6 @@ Aun que no marques esta opcion, los BOEs malformados se veran en tus alertas, ya
 
 
 # TODO
-* Hacer `$ python manager.py boe_start 2013/01/01`
 * Mejora de Pagina Acerca
 * Insertar apartados para cumplir "Ley de Cookies"
 * Mejorar documentacion sobre configuracion de Reglas
