@@ -1,6 +1,7 @@
-from django.conf.urls import patterns, url
+from django.conf.urls import url
+from boe.web.views import *
 
-urlpatterns = patterns('boe.web.views',
-    #url(r'^$', views.acerca, name='acerca'),
-    url(r'^perfil/$', 'perfil', name='perfil'),
-)
+urlpatterns = [
+    # url(r'^$', views.acerca, name='acerca'),
+    url(r'^perfil/$', perfil, name='perfil'),
+]

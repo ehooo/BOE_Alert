@@ -8,4 +8,3 @@ admin.site.register(OrigenLegislativo)
 admin.site.register(Materia)
 admin.site.register(MateriasCPV)
 admin.site.register(Alerta)
-

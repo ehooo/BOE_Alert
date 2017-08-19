@@ -5,6 +5,7 @@ from django.contrib.auth.models import User
 from social.pipeline.partial import partial
 import logging
 
+
 @partial
 def check_email(strategy, details, user=None, is_new=False, *args, **kwargs):
     password = None
@@ -14,7 +15,7 @@ def check_email(strategy, details, user=None, is_new=False, *args, **kwargs):
         pass
     if not user and password and details['email'].find('@') > 0:
         try:
-            user = User.objects.get(email = details['email'])
+            user = User.objects.get(email=details['email'])
         except User.DoesNotExist:
             details['password'] = make_password(password)
     if user and user.email:
@@ -22,6 +23,6 @@ def check_email(strategy, details, user=None, is_new=False, *args, **kwargs):
         if request and request.POST and 'password' in request.POST:
             if not is_new:
                 if not user.check_password(request.POST['password']):
-                    logging.warn("PASWORD WRONG for %s"%(user))
+                    logging.warn("PASWORD WRONG for %s" % (user))
                     return redirect('login')
     return {'user': user, 'is_new': user is None}

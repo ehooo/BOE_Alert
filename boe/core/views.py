@@ -2,11 +2,9 @@ from django.shortcuts import render_to_response
 from django.shortcuts import redirect
 from django.shortcuts import get_object_or_404
 from django.template import RequestContext
-from django.contrib.auth.models import User
 from django.contrib.auth.decorators import login_required
 from django.views.decorators.csrf import csrf_protect
 from django.http import HttpResponse
-from django.db.models import Q
 
 from boe.core.forms import ReglaForm
 from boe.core.forms import ReglaSForm
@@ -17,13 +15,13 @@ from boe.core.models import Regla
 from boe.core.models import ReglaA
 from boe.core.models import ReglaB
 from boe.core.models import ReglaS
-from boe.core.models import ExpresionRegular
+
 
 @login_required
 def reglas(request, rule_type=None):
     context = {
-        'cls_basico':'active',
-        'cls_avanzado':''
+        'cls_basico': 'active',
+        'cls_avanzado': ''
     }
     context['regla_form'] = ReglaForm()
     context['rapida_form'] = ReglaRapidaForm()
@@ -40,12 +38,13 @@ def reglas(request, rule_type=None):
     #'''
     return render_to_response('boe/reglas.html', context, RequestContext(request))
 
+
 @csrf_protect
 @login_required
 def add_regla(request, rule_type=None):
     context = {
-        'cls_basico':'',
-        'cls_avanzado':''
+        'cls_basico': '',
+        'cls_avanzado': ''
     }
     context['regla_form'] = ReglaForm()
     context['rapida_form'] = ReglaRapidaForm()
@@ -67,7 +66,7 @@ def add_regla(request, rule_type=None):
             context['rapida_form'] = ReglaRapidaForm(request.POST)
             form = context['rapida_form']
         if form and form.is_valid():
-            if rule_type in ['A','B','S']:
+            if rule_type in ['A', 'B', 'S']:
                 context['regla_form'] = ReglaForm(request.POST)
                 if context['regla_form'].is_valid():
                     regla = context['regla_form'].save(True, request.user)
@@ -87,8 +86,7 @@ def add_regla(request, rule_type=None):
     if context['cls_avanzado'] == '':
         context['cls_basico'] = 'active'
     return render_to_response('boe/reglas.html', context, RequestContext(request))
-        
-    return HttpResponse("Hello, world. You're at the poll index.")
+
 
 @csrf_protect
 @login_required
@@ -114,7 +112,5 @@ def details_regla(request, regla_id):
             except ReglaS.DoesNotExist:
                 pass
 
-    context = { 'regla':regla }
+    context = {'regla': regla}
     return render_to_response('boe/detalles.html', context, RequestContext(request))
-
-

@@ -4,11 +4,8 @@ from django.http import HttpResponse
 from django.shortcuts import redirect
 from django.contrib.auth.decorators import login_required
 
-from celery import current_app
 from celery.task.control import inspect
-from celery.result import AsyncResult
 from datetime import date
-import json
 import httplib
 import logging
 
@@ -20,11 +17,9 @@ from djcelery.models import TaskMeta
 from kombu.transport.django.models import Message
 from celery.states import ALL_STATES
 
-
 from django.shortcuts import render_to_response
 from django.shortcuts import get_object_or_404
 from django.template import RequestContext
-from symbol import except_clause
 
 
 @login_required
@@ -38,11 +33,12 @@ def alertas(request):
     #'''
     return render_to_response('boe/alertas.html', {}, RequestContext(request))
 
+
 @login_required
 def run_hoy(request):
     hoy = date.today()
     boe_parser = BoeDiaParser(hoy)
-    boes = Boe.objects.filter( fecha=hoy, boe__startswith='BOE-S')
+    boes = Boe.objects.filter(fecha=hoy, boe__startswith='BOE-S')
     if boes.count() > 0:
         return redirect('boescan:run_boe', boes[0].boe)
     else:
@@ -50,10 +46,12 @@ def run_hoy(request):
         if estado == httplib.OK:
             boe_parser.feed(contenido.decode('utf-8', 'replace'))
             if boe_parser.boe:
-                boe_id = Boe.objects.create( boe=boe_parser.boe, fecha=hoy )
+                boe_id = Boe.objects.create(boe=boe_parser.boe, fecha=hoy)
                 return redirect('boescan:run_boe', boe_parser.boe)
-        logging.info("Respuesta %s Cabezeras %s"%(estado, headers))
+        logging.info("Respuesta %s Cabezeras %s" % (estado, headers))
     raise Http404
+
+
 @login_required
 def run_boe(request, boe_id):
     boe_obj = get_object_or_404(Boe, boe=boe_id)
@@ -64,27 +62,28 @@ def run_boe(request, boe_id):
         result = procesa.AsyncResult(boe_obj.celery_task)
 
     context = {
-        'boe':boe_obj,
-        'result':result
+        'boe': boe_obj,
+        'result': result
     }
     return render_to_response('boe/scaner.html', context, RequestContext(request))
 
-#@login_required
+
+# @login_required
 def status(request):
     response_data = {}
 
     if request.user.is_staff:
         i = inspect()
-        response_data['active']=i.active()
-        response_data['stats'] =i.stats()
+        response_data['active'] = i.active()
+        response_data['stats'] = i.stats()
 
         boes_error = Boe.objects.filter(error=True)
         response_data['error'] = []
         for er in boes_error.all():
             response_data['error'].append({
-                'error_text':er.error_text,
-                #'task':er.celery_task,
-                'boe':er.boe
+                'error_text': er.error_text,
+                # 'task':er.celery_task,
+                'boe': er.boe
             })
 
     msgs = Message.objects.filter(queue__name="celery")
@@ -98,7 +97,7 @@ def status(request):
         if payload['properties']['body_encoding'] == 'base64':
             body = base64.b64decode(body)
         try:
-            if procesa.AsyncResult( task_id ).status == 'SUCCESS':
+            if procesa.AsyncResult(task_id).status == 'SUCCESS':
                 response_data['tasks_done'] += 1
                 '''
                 print payload
@@ -121,7 +120,7 @@ def status(request):
         failtasks = TaskMeta.objects.filter(status='FAILURE')
         for task in failtasks:
             response_data['failure_tasks'].append({
-                'task_id':task.task_id
-                 ,'traceback':task.traceback
+                'task_id': task.task_id
+                , 'traceback': task.traceback
             })
     return HttpResponse(json.dumps(response_data), content_type="application/json")

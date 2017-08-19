@@ -1,0 +1,4 @@
+django==1.11
+python-social-auth==1.4
+twython==3.5
+celery==4.1

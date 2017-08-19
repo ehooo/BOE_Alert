@@ -7,6 +7,7 @@ from django.views.decorators.csrf import csrf_protect
 from boe.web.forms import PerfilForm
 from boe.web.models import Perfil
 
+
 @csrf_protect
 @login_required
 def perfil(request):
@@ -20,7 +21,7 @@ def perfil(request):
             model.user = request.user
             model.save()
     context = {
-        'form':form,
-        'perfil':perfil
+        'form': form,
+        'perfil': perfil
     }
     return render_to_response('boe/perfil.html', context, RequestContext(request))

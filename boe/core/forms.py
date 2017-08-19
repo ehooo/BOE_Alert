@@ -18,6 +18,7 @@ class ReglaForm(forms.ModelForm):
     class Meta:
         model = Regla
         exclude = ('user',)
+
     def save(self, commit=True, user=None):
         regla = None
         try:
@@ -29,11 +30,15 @@ class ReglaForm(forms.ModelForm):
                     regla.user = user
                 regla.save()
         return regla
+
+
 class ReglaRapidaForm(forms.ModelForm):
     expresion = forms.CharField(max_length=254, validators=[RegexValidator])
+
     class Meta:
         model = Regla
         exclude = ('user',)
+
     def clean_expresion(self):
         ret = None
         if self.cleaned_data["expresion"]:
@@ -42,6 +47,7 @@ class ReglaRapidaForm(forms.ModelForm):
             except ExpresionRegular.DoesNotExist:
                 ret = ExpresionRegular.objects.create(re_exp=self.cleaned_data["expresion"])
         return ret
+
     def save(self, commit=True, user=None):
         regla = None
         try:
@@ -53,11 +59,15 @@ class ReglaRapidaForm(forms.ModelForm):
                     regla.user = user
                 regla.save()
         return regla
+
+
 class ReglaSForm(forms.ModelForm):
     titulo = models.CharField(max_length=254, unique=True, validators=[RegexValidator])
+
     class Meta:
         model = ReglaS
         exclude = ('regla', 're_titulo',)
+
     def save(self, commit=True, regla=None):
         subregla = super(ReglaSForm, self).save(commit=False)
         if commit:
@@ -69,12 +79,16 @@ class ReglaSForm(forms.ModelForm):
                 subregla.regla = regla
             subregla.save()
         return regla
+
+
 class ReglaAForm(forms.ModelForm):
     titulo = models.CharField(max_length=254, unique=True, validators=[RegexValidator])
     texto = models.CharField(max_length=254, unique=True, validators=[RegexValidator])
+
     class Meta:
         model = ReglaA
         exclude = ('regla', 're_titulo', 're_texto',)
+
     def save(self, commit=True, regla=None):
         subregla = super(ReglaAForm, self).save(commit=False)
         if commit:
@@ -90,12 +104,16 @@ class ReglaAForm(forms.ModelForm):
                 subregla.regla = regla
             subregla.save()
         return regla
+
+
 class ReglaBForm(forms.ModelForm):
     titulo = models.CharField(max_length=254, unique=True, validators=[RegexValidator])
     texto = models.CharField(max_length=254, unique=True, validators=[RegexValidator])
+
     class Meta:
         model = ReglaB
         exclude = ('regla', 're_titulo', 're_texto',)
+
     def save(self, commit=True, regla=None):
         subregla = super(ReglaBForm, self).save(commit=False)
         if commit:
